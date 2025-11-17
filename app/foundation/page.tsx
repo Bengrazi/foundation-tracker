@@ -15,7 +15,6 @@ type ScheduleType =
 type Routine = {
   id: string;
   name: string;
-  timeOfDay?: "morning" | "afternoon" | "evening";
   schedule: ScheduleType;
   xPerWeek?: number;
   createdAt: string; // YYYY-MM-DD
@@ -33,10 +32,48 @@ type LogsByDate = {
   };
 };
 
+type OnboardingProfile = {
+  priorities: string;
+  lifeSummary: string;
+  ideology: string;
+  keyTruth?: string;
+  aiVoice?: string;
+};
+
+type GeneratedGoal = {
+  title: string;
+  horizon: "3y" | "1y" | "6m" | "1m";
+};
+
+type StoredGoal = {
+  id: string;
+  title: string;
+  targetDate?: string;
+  status: "not_started" | "in_progress" | "achieved";
+  pinned?: boolean;
+  horizon: "3y" | "1y" | "6m" | "1m";
+  sortIndex?: number;
+};
+
 const ROUTINE_STORAGE_KEY = "foundation_routines_v1";
 const LOGS_STORAGE_KEY = "foundation_logs_v1";
 const GOLD_STORAGE_KEY = "foundation_gold_streak_v1";
 const DATE_STORAGE_KEY = "foundation_last_date_v1";
+const PROFILE_STORAGE_KEY = "foundation_profile_v1";
+const GOALS_STORAGE_KEY = "foundation_goals_v1";
+
+function formatDate(d: Date) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addMonths(date: Date, months: number) {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
 
 export default function FoundationPage() {
   const [selectedDate, setSelectedDate] = useState(
@@ -55,6 +92,13 @@ export default function FoundationPage() {
   const [newName, setNewName] = useState("");
   const [newSchedule, setNewSchedule] = useState<ScheduleType>("daily");
   const [newXPerWeek, setNewXPerWeek] = useState("3");
+
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [obPriorities, setObPriorities] = useState("");
+  const [obLifeSummary, setObLifeSummary] = useState("");
+  const [obIdeology, setObIdeology] = useState("");
+  const [obLoading, setObLoading] = useState(false);
+  const [obError, setObError] = useState<string | null>(null);
 
   // ---------- LOAD ONCE ----------
   useEffect(() => {
@@ -83,15 +127,37 @@ export default function FoundationPage() {
       const defaults: Routine[] = [
         {
           id: crypto.randomUUID(),
-          name: "Wake up before 7am",
-          timeOfDay: "morning",
-          schedule: "weekdays",
+          name: "Complete A+ Problem for today",
+          schedule: "daily",
           createdAt: todayStr,
         },
         {
           id: crypto.randomUUID(),
-          name: "Meditate 5 minutes",
-          timeOfDay: "morning",
+          name: "Journal and reflect",
+          schedule: "daily",
+          createdAt: todayStr,
+        },
+        {
+          id: crypto.randomUUID(),
+          name: "Move your body 45+ min",
+          schedule: "daily",
+          createdAt: todayStr,
+        },
+        {
+          id: crypto.randomUUID(),
+          name: "Breathing exercises",
+          schedule: "daily",
+          createdAt: todayStr,
+        },
+        {
+          id: crypto.randomUUID(),
+          name: "Eat 150g+ of protein",
+          schedule: "daily",
+          createdAt: todayStr,
+        },
+        {
+          id: crypto.randomUUID(),
+          name: "Take supplements",
           schedule: "daily",
           createdAt: todayStr,
         },
@@ -119,13 +185,17 @@ export default function FoundationPage() {
       const n = Number(goldRaw);
       if (!Number.isNaN(n)) setGoldStreak(n);
     }
+
+    // onboarding profile existence check
+    const profileRaw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!profileRaw) {
+      setShowOnboarding(true);
+    }
   }, []);
 
   // ---------- HELPERS TO UPDATE + SAVE ----------
 
-  const updateRoutines = (
-    updater: (prev: Routine[]) => Routine[]
-  ) => {
+  const updateRoutines = (updater: (prev: Routine[]) => Routine[]) => {
     setRoutines((prev) => {
       const next = updater(prev);
       if (typeof window !== "undefined") {
@@ -155,12 +225,27 @@ export default function FoundationPage() {
     }
   };
 
+  const getProfile = (): OnboardingProfile | null => {
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as OnboardingProfile;
+    } catch {
+      return null;
+    }
+  };
+
   // ---------- AI INTENTION ----------
   useEffect(() => {
     const loadIntention = async () => {
       try {
         setLoadingIntention(true);
-        const res = await fetch("/api/intention", { method: "POST" });
+        const profile = getProfile();
+        const res = await fetch("/api/intention", {
+          method: "POST",
+          body: JSON.stringify({ profile }),
+        });
         const data = await res.json();
         if (data?.intention) setIntention(data.intention);
       } catch (e) {
@@ -287,10 +372,190 @@ export default function FoundationPage() {
     (r) => day[r.id]?.done
   ).length;
 
+  // ---------- ONBOARDING SUBMIT ----------
+
+  const handleOnboardingSubmit = async () => {
+    if (!obPriorities.trim() || !obLifeSummary.trim() || !obIdeology.trim()) {
+      setObError("Please answer all three questions.");
+      return;
+    }
+
+    setObError(null);
+    setObLoading(true);
+    try {
+      const res = await fetch("/api/onboarding", {
+        method: "POST",
+        body: JSON.stringify({
+          priorities: obPriorities,
+          lifeSummary: obLifeSummary,
+          ideology: obIdeology,
+        }),
+      });
+      const data = await res.json();
+
+      const profile: OnboardingProfile = {
+        priorities: obPriorities,
+        lifeSummary: obLifeSummary,
+        ideology: obIdeology,
+        keyTruth: data?.keyTruth ?? undefined,
+        aiVoice: data?.aiVoice ?? undefined,
+      };
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          PROFILE_STORAGE_KEY,
+          JSON.stringify(profile)
+        );
+      }
+
+      // Seed goals if none exist yet
+      if (typeof window !== "undefined") {
+        const goalsRaw = window.localStorage.getItem(GOALS_STORAGE_KEY);
+        let existing: StoredGoal[] = [];
+        if (goalsRaw) {
+          try {
+            existing = JSON.parse(goalsRaw);
+          } catch {
+            existing = [];
+          }
+        }
+
+        if (existing.length === 0 && Array.isArray(data?.goals)) {
+          const baseDate = new Date();
+          const generated: StoredGoal[] = [];
+
+          const pushGoal = (g: GeneratedGoal, horizonIndex: number) => {
+            let target: Date;
+            if (g.horizon === "3y") target = addMonths(baseDate, 36);
+            else if (g.horizon === "1y") target = addMonths(baseDate, 12);
+            else if (g.horizon === "6m") target = addMonths(baseDate, 6);
+            else target = addMonths(baseDate, 1);
+
+            generated.push({
+              id: crypto.randomUUID(),
+              title: g.title,
+              horizon: g.horizon,
+              status: "not_started",
+              pinned: horizonIndex === 0, // pin the furthest-out one
+              targetDate: formatDate(target),
+              sortIndex: horizonIndex,
+            });
+          };
+
+          // Optional key truth as a "3y" style anchor goal
+          if (profile.keyTruth) {
+            pushGoal(
+              {
+                title: `Key truth: ${profile.keyTruth}`,
+                horizon: "3y",
+              },
+              0
+            );
+          }
+
+          data.goals.forEach((g: GeneratedGoal, idx: number) =>
+            pushGoal(g, idx + 1)
+          );
+
+          window.localStorage.setItem(
+            GOALS_STORAGE_KEY,
+            JSON.stringify(generated)
+          );
+        }
+      }
+
+      setShowOnboarding(false);
+    } catch (e) {
+      console.error(e);
+      setObError(
+        "Something went wrong creating your starter goals. You can always add your own later."
+      );
+    } finally {
+      setObLoading(false);
+    }
+  };
+
   // ---------- UI ----------
   return (
     <div className="space-y-4">
       <AuthGuardHeader />
+
+      {/* Onboarding overlay */}
+      {showOnboarding && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-4 shadow-xl">
+            <h2 className="mb-2 text-lg font-semibold">
+              Welcome to Foundation
+            </h2>
+            <p className="mb-3 text-xs text-slate-600">
+              This quick primer is{" "}
+              <span className="font-semibold">private</span> and only used to
+              personalize your AI intentions, goals, and insights. It&apos;s a
+              one-time thing.
+            </p>
+
+            <div className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-medium">
+                  1. Rank from most to least important for you
+                </label>
+                <p className="text-[11px] text-slate-500">
+                  Use the words <strong>Financial, Family, Friends
+                  (Community), Personal Growth</strong>.
+                </p>
+                <textarea
+                  value={obPriorities}
+                  onChange={(e) => setObPriorities(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
+                  placeholder="Example: Personal Growth, Family, Financial, Friends (Community)"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-medium">
+                  2. Briefly describe your life today and where you&apos;d like
+                  to be in 10 years
+                </label>
+                <textarea
+                  value={obLifeSummary}
+                  onChange={(e) => setObLifeSummary(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
+                  placeholder="Finances, family, community, personal growth now – and your ideal 10-year future."
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-medium">
+                  3. How would you describe your ideology or worldview?
+                </label>
+                <textarea
+                  value={obIdeology}
+                  onChange={(e) => setObIdeology(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
+                  placeholder="E.g. Christian, stoic, freedom lover, capitalist, other…"
+                />
+              </div>
+
+              {obError && (
+                <p className="text-[11px] text-red-500">{obError}</p>
+              )}
+
+              <div className="mt-2 flex items-center justify-end gap-2">
+                <button
+                  disabled={obLoading}
+                  onClick={handleOnboardingSubmit}
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  {obLoading ? "Creating your foundations..." : "Save & continue"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header with date + gold streak */}
       <header className="space-y-2">
@@ -333,11 +598,18 @@ export default function FoundationPage() {
           <button
             disabled={loadingIntention}
             onClick={async () => {
-              setLoadingIntention(true);
-              const res = await fetch("/api/intention", { method: "POST" });
-              const data = await res.json();
-              if (data?.intention) setIntention(data.intention);
-              setLoadingIntention(false);
+              try {
+                setLoadingIntention(true);
+                const profile = getProfile();
+                const res = await fetch("/api/intention", {
+                  method: "POST",
+                  body: JSON.stringify({ profile }),
+                });
+                const data = await res.json();
+                if (data?.intention) setIntention(data.intention);
+              } finally {
+                setLoadingIntention(false);
+              }
             }}
             className="text-xs underline text-slate-500 disabled:opacity-40"
           >
@@ -461,11 +733,6 @@ export default function FoundationPage() {
                         {routine.name}
                       </p>
                       <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                        {routine.timeOfDay && (
-                          <span className="capitalize">
-                            {routine.timeOfDay}
-                          </span>
-                        )}
                         <span>• {scheduleLabel(routine)}</span>
                         {streak > 0 && (
                           <span>• 🔥 {streak}-day streak</span>

@@ -10,11 +10,30 @@ type Message = {
   content: string;
 };
 
+type Profile = {
+  priorities?: string;
+  lifeSummary?: string;
+  ideology?: string;
+  keyTruth?: string;
+  aiVoice?: string;
+};
+
 const quickModes = [
   { id: "last7days", label: "Last 7 days" },
   { id: "allReflections", label: "All reflections" },
   { id: "general", label: "General advice" },
 ];
+
+function getProfile(): Profile | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem("foundation_profile_v1");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as Profile;
+  } catch {
+    return null;
+  }
+}
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -37,11 +56,13 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
+      const profile = getProfile();
       const res = await fetch("/api/chat", {
         method: "POST",
         body: JSON.stringify({
           message: newMessage.content,
           contextMode,
+          profile,
         }),
       });
       const data = await res.json();
@@ -69,8 +90,8 @@ export default function ChatPage() {
       <header className="space-y-1">
         <h1 className="text-xl font-semibold">Chat with Foundation AI</h1>
         <p className="text-xs text-slate-500">
-          Foundation AI uses your routines, goals, and reflections to respond
-          just to you.
+          Foundation AI uses your routines, goals, reflections, and onboarding
+          answers to respond just to you.
         </p>
       </header>
 

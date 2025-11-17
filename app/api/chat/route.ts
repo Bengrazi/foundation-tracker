@@ -2,12 +2,18 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "OPENAI_API_KEY is not set. Add it in your environment variables."
+    );
+  }
+  return new OpenAI({ apiKey });
+}
 
 export async function POST(req: Request) {
-  const { message, contextMode } = await req.json();
+  const { message, contextMode, profile } = await req.json();
 
   let contextDescription = "";
   if (contextMode === "last7days") {
@@ -20,12 +26,25 @@ export async function POST(req: Request) {
       "Give general advice based on healthy routines and consistent habits.";
   }
 
+  const profileText = profile
+    ? `
+User priorities: ${profile.priorities ?? ""}
+Life summary / 10-year vision: ${profile.lifeSummary ?? ""}
+Ideology / worldview: ${profile.ideology ?? ""}
+Key truth: ${profile.keyTruth ?? ""}
+Preferred tone: ${profile.aiVoice ?? ""}
+`
+    : "";
+
   const system = `
 You are Foundation AI, a calm, supportive, slightly stoic and optimistic coach.
 Be VERY concise and practical.
 Respond in at most 3 short paragraphs or 5 bullet points, and keep it under ~120 words.
 Avoid fluffy quotes. Focus on one or two specific, doable suggestions.
+Use the user's values, long-term vision, and ideology to choose examples and tone, but do not flatter them or over-index on labels.
 `;
+
+  const client = getOpenAIClient();
 
   const completion = await client.chat.completions.create({
     model: "gpt-4.1",
@@ -33,7 +52,10 @@ Avoid fluffy quotes. Focus on one or two specific, doable suggestions.
       { role: "system", content: system },
       {
         role: "user",
-        content: `Context: ${contextDescription}\n\nUser says: ${message}`,
+        content:
+          `Context mode: ${contextDescription}\n\n` +
+          (profileText ? `User profile:\n${profileText}\n\n` : "") +
+          `User says: ${message}`,
       },
     ],
   });
