@@ -302,12 +302,23 @@ export default function FoundationPage() {
         const baseDate = new Date();
         const generated: StoredGoal[] = [];
 
+        const normalizeTitle = (g: any): string => {
+          if (!g) return "";
+          if (typeof g === "string") return g.trim();
+          if (typeof g.title === "string" && g.title.trim()) return g.title.trim();
+          if (typeof g.goal === "string" && g.goal.trim()) return g.goal.trim();
+          if (typeof g.text === "string" && g.text.trim()) return g.text.trim();
+          return "";
+        };
+
         const inject = (title: string, horizon: GeneratedHorizon, order: number) => {
+          if (!title) return;
           let target = baseDate;
           if (horizon === "3y") target = addMonths(baseDate, 36);
           else if (horizon === "1y") target = addMonths(baseDate, 12);
           else if (horizon === "6m") target = addMonths(baseDate, 6);
           else target = addMonths(baseDate, 1);
+
           generated.push({
             id: crypto.randomUUID(),
             title,
@@ -320,12 +331,18 @@ export default function FoundationPage() {
         };
 
         (["3y", "1y", "6m", "1m"] as GeneratedHorizon[]).forEach((h) => {
-          const arr = Array.isArray(goals[h]) ? goals[h] as { title: string }[] : [];
-          arr.slice(0, 3).forEach((g: any, idx: number) => inject(String(g.title || "").trim(), h, idx));
+          const arr = Array.isArray(goals[h]) ? (goals[h] as any[]) : [];
+          arr.slice(0, 3).forEach((g, idx) => {
+            const title = normalizeTitle(g);
+            inject(title, h, idx);
+          });
         });
 
-        localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(generated));
+        if (generated.length > 0) {
+          localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(generated));
+        }
       }
+
 
       setShowOnboarding(false);
     } catch (e) {

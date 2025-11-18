@@ -10,12 +10,10 @@ function client() {
 
 /**
  * Input: { priorities, lifeSummary, ideology }
- * Output (STRICT JSON):
+ * Output:
  * {
  *   "keyTruth": string,
- *   "board": [
- *      {"name": string, "role": string, "why": string}, ...
- *   ],
+ *   "board": [{ "name": string, "role": string, "why": string }, ...],
  *   "goals": {
  *      "3y": [{"title": string}, ... up to 3],
  *      "1y": [{"title": string}, ... up to 3],
@@ -29,16 +27,19 @@ export async function POST(req: Request) {
   const { priorities, lifeSummary, ideology } = await req.json();
 
   const system = `
-You are a pragmatic, optimistic planner. Output must be a SINGLE JSON object matching the required schema.
+You are a pragmatic, optimistic planner. Output must be a SINGLE JSON object with the described schema.
 
-Rules:
-- "board": 4–6 members max. Give realistic archetypes (e.g., "CFO mentor", "Family advisor", "Strength & cardio coach",
-  "Community connector", "Founder/Operator", "Stoic mentor", etc.). Include "why" for each (1 short sentence).
-- "goals": For each horizon (3y, 1y, 6m, 1m), propose 1–3 specific, measurable goals that, taken together,
-  realistically lead toward the user's 10-year intent implied in their summary. Be optimistic, but not delusional.
-- "keyTruth": 1 concise guiding belief for the next decade.
-- "aiVoice": 2–3 sentences describing tone for the app when speaking to this user.
-Keep the JSON compact and free of escape-breaking characters. No additional commentary.
+- "board": 4–6 members max. Each:
+   - "name": short archetype (e.g., "CFO mentor", "Stoic coach").
+   - "role": 2–5 words.
+   - "why": one short sentence.
+- "goals": For each horizon (3y, 1y, 6m, 1m), propose 1–3 goals.
+   - Each "title" must be a concise sentence fragment (ideally 6–12 words, max 15).
+   - Goals should be realistic but ambitious, clearly helping toward the implied 10-year picture.
+- "keyTruth": 1 short guiding belief sentence (max ~15 words).
+- "aiVoice": 2–3 short sentences describing tone for the app when speaking to this user.
+
+Keep the JSON compact and valid. No extra commentary, no markdown, no trailing commas.
 `;
 
   const user = `
@@ -59,6 +60,10 @@ Ideology / worldview: ${ideology}
 
   const raw = resp.choices[0]?.message?.content ?? "{}";
   let json: any;
-  try { json = JSON.parse(raw); } catch { json = {}; }
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    json = {};
+  }
   return NextResponse.json(json);
 }

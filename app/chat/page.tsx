@@ -26,7 +26,7 @@ const quickModes = [
 
 function getProfile(): Profile | null {
   if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem("foundation_profile_v1");
+  const raw = localStorage.getItem("foundation_profile_v1");
   if (!raw) return null;
   try {
     return JSON.parse(raw) as Profile;
@@ -41,6 +41,12 @@ export default function ChatPage() {
   const [contextMode, setContextMode] =
     useState<"last7days" | "allReflections" | "general">("general");
   const [loading, setLoading] = useState(false);
+
+  const autoGrow = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -83,15 +89,24 @@ export default function ChatPage() {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div className="flex h-full flex-col gap-3 text-slate-100">
       <AuthGuardHeader />
 
       <header className="space-y-1">
-        <h1 className="text-xl font-semibold">Chat with Foundation AI</h1>
-        <p className="text-xs text-slate-500">
-          Foundation AI uses your routines, goals, reflections, and onboarding
-          answers to respond just to you.
+        <h1 className="text-xl font-semibold text-amber-50">
+          Chat with Foundation AI
+        </h1>
+        <p className="text-xs text-slate-400">
+          Ask about your routines, goals, or reflections. Replies stay short and
+          practical.
         </p>
       </header>
 
@@ -102,10 +117,10 @@ export default function ChatPage() {
             onClick={() =>
               setContextMode(m.id as "last7days" | "allReflections" | "general")
             }
-            className={`rounded-full border px-3 py-1 ${
+            className={`rounded-full border px-3 py-1 transition ${
               contextMode === m.id
-                ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                : "border-slate-200 bg-white text-slate-600"
+                ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
+                : "border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-100"
             }`}
           >
             {m.label}
@@ -113,7 +128,7 @@ export default function ChatPage() {
         ))}
       </div>
 
-      <div className="flex-1 space-y-2 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-sm">
+      <div className="flex-1 space-y-2 overflow-auto rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800">
         {messages.map((m) => (
           <div
             key={m.id}
@@ -122,10 +137,10 @@ export default function ChatPage() {
             }`}
           >
             <div
-              className={`max-w-[80%] rounded-2xl px-3 py-2 ${
+              className={`max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm ${
                 m.role === "user"
-                  ? "bg-emerald-600 text-white"
-                  : "bg-slate-100 text-slate-900"
+                  ? "bg-emerald-500 text-slate-950"
+                  : "bg-slate-800 text-slate-100"
               }`}
             >
               {m.content}
@@ -135,23 +150,35 @@ export default function ChatPage() {
         {loading && (
           <p className="text-xs text-slate-400">Foundation AI is thinking…</p>
         )}
+        {!loading && messages.length === 0 && (
+          <p className="text-xs text-slate-500">
+            Example: &quot;What should I focus on this week to move my 3-year
+            goals forward?&quot;
+          </p>
+        )}
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
+      <div className="space-y-2">
+        <textarea
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          placeholder="Ask anything…"
-          className="flex-1 rounded-full border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+          onChange={(e) => {
+            setInput(e.target.value);
+            autoGrow(e.currentTarget);
+          }}
+          onKeyDown={handleKeyDown}
+          rows={2}
+          className="w-full whitespace-pre-wrap break-words overflow-hidden resize-none rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
+          placeholder="Ask anything… (Shift+Enter for new line)"
         />
-        <button
-          onClick={sendMessage}
-          disabled={loading}
-          className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          Send
-        </button>
+        <div className="flex justify-end">
+          <button
+            onClick={sendMessage}
+            disabled={loading}
+            className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50"
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
   );
