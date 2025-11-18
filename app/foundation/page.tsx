@@ -1,10 +1,11 @@
-// app/foundation/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
+import { applySavedTextSize } from "@/lib/textSize";
 
+// ---- Types ----
 type ScheduleType = "daily" | "weekdays" | "weekly" | "monthly" | "xPerWeek";
 
 type Routine = {
@@ -43,6 +44,7 @@ type StoredGoal = {
   sortIndex?: number;
 };
 
+// ---- Storage keys ----
 const ROUTINE_STORAGE_KEY = "foundation_routines_v1";
 const LOGS_STORAGE_KEY = "foundation_logs_v1";
 const GOLD_STORAGE_KEY = "foundation_gold_streak_v1";
@@ -63,8 +65,13 @@ function addMonths(date: Date, months: number) {
   return d;
 }
 
-// ---------- Component ----------
+// ---- Component ----
 export default function FoundationPage() {
+  // Apply text-size preference on mount
+  useEffect(() => {
+    applySavedTextSize();
+  }, []);
+
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), "yyyy-MM-dd")
   );
@@ -75,13 +82,12 @@ export default function FoundationPage() {
   const [logs, setLogs] = useState<LogsByDate>({});
   const [goldStreak, setGoldStreak] = useState(0);
 
-  // New habit
   const [newOpen, setNewOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newSchedule, setNewSchedule] = useState<ScheduleType>("daily");
   const [newXPerWeek, setNewXPerWeek] = useState("3");
 
-  // Onboarding
+  // onboarding
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [obPriorities, setObPriorities] = useState("");
   const [obLifeSummary, setObLifeSummary] = useState("");
@@ -94,7 +100,7 @@ export default function FoundationPage() {
     [selectedDate]
   );
 
-  // ---------- Load once ----------
+  // ---- Initial load ----
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -107,8 +113,11 @@ export default function FoundationPage() {
     if (rRaw) {
       try {
         setRoutines(JSON.parse(rRaw));
-      } catch {}
+      } catch {
+        // ignore
+      }
     } else {
+      // default starter habits
       const defaults: Routine[] = [
         {
           id: crypto.randomUUID(),
@@ -144,12 +153,16 @@ export default function FoundationPage() {
     if (lRaw) {
       try {
         setLogs(JSON.parse(lRaw));
-      } catch {}
+      } catch {
+        // ignore
+      }
     }
 
     // streak
     const gRaw = localStorage.getItem(GOLD_STORAGE_KEY);
-    if (gRaw && !Number.isNaN(Number(gRaw))) setGoldStreak(Number(gRaw));
+    if (gRaw && !Number.isNaN(Number(gRaw))) {
+      setGoldStreak(Number(gRaw));
+    }
 
     // onboarding
     const profileRaw = localStorage.getItem(PROFILE_STORAGE_KEY);
@@ -160,8 +173,8 @@ export default function FoundationPage() {
     localStorage.setItem(ROUTINE_STORAGE_KEY, JSON.stringify(next));
   const persistLogs = (next: LogsByDate) =>
     localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(next));
-  const persistGold = (n: number) =>
-    localStorage.setItem(GOLD_STORAGE_KEY, String(n));
+  const persistGold = (value: number) =>
+    localStorage.setItem(GOLD_STORAGE_KEY, String(value));
 
   const getProfile = (): OnboardingProfile | null => {
     if (typeof window === "undefined") return null;
@@ -174,7 +187,7 @@ export default function FoundationPage() {
     }
   };
 
-  // ---------- AI Intention ----------
+  // ---- AI intention ----
   useEffect(() => {
     const run = async () => {
       try {
@@ -186,6 +199,8 @@ export default function FoundationPage() {
         });
         const data = await res.json();
         if (data?.intention) setIntention(data.intention);
+      } catch {
+        // ignore
       } finally {
         setLoadingIntention(false);
       }
@@ -193,7 +208,7 @@ export default function FoundationPage() {
     run();
   }, []);
 
-  // ---------- Active routines ----------
+  // ---- Routines per date ----
   const getActiveRoutinesForDate = (date: string) =>
     routines.filter(
       (r) => !(r.createdAt > date || (r.deletedFrom && date >= r.deletedFrom))
@@ -298,7 +313,15 @@ export default function FoundationPage() {
   const day = logs[selectedDate] ?? {};
   const completedCount = activeRoutines.filter((r) => day[r.id]?.done).length;
 
-  // ---------- Onboarding submit ----------
+  const dateInputId = "foundation-date-input";
+
+  const autoGrow = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  // ---- Onboarding submit ----
   const handleOnboardingSubmit = async () => {
     if (!obPriorities.trim() || !obLifeSummary.trim() || !obIdeology.trim()) {
       setObError("Please answer all three questions.");
@@ -328,8 +351,7 @@ export default function FoundationPage() {
       };
       localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
 
-      // SIMPLE seeding: if no goals yet and we have a keyTruth,
-      // create ONE 3-year goal from that key truth.
+      // Simple seeding: one 3-year goal from keyTruth if no goals yet
       const existingRaw = localStorage.getItem(GOALS_STORAGE_KEY);
       if (!existingRaw && data?.keyTruth) {
         const baseDate = new Date();
@@ -359,13 +381,19 @@ export default function FoundationPage() {
     }
   };
 
-  const dateInputId = "foundation-date-input";
+  const autoGrowOnChange =
+    (update: (v: string) => void) =>
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      update(e.target.value);
+      autoGrow(e.currentTarget);
+    };
 
-  const autoGrow = (el: HTMLTextAreaElement | null) => {
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  };
+  const autoGrowNotes =
+    (id: string) =>
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      updateNotes(id, e.target.value);
+      autoGrow(e.currentTarget);
+    };
 
   return (
     <div className="min-h-[calc(100vh-4rem)] space-y-4 bg-slate-950 text-slate-100">
@@ -380,7 +408,8 @@ export default function FoundationPage() {
             </h2>
             <p className="mb-3 text-xs text-slate-300">
               This quick primer is <span className="font-semibold">private</span> and only used to
-              personalize your AI intentions, goals, and insights. It&apos;s a one-time thing.
+              personalize your AI intentions, goals, and insights. It&apos;s a one-time
+              thing.
             </p>
 
             <div className="space-y-3 text-xs">
@@ -398,14 +427,15 @@ export default function FoundationPage() {
                     autoGrow(e.currentTarget);
                   }}
                   rows={2}
-                  className="w-full overflow-hidden resize-none rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
+                  className="w-full overflow-hidden resize-none rounded-xl border border-slate-600 bg-slate-950/75 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
                   placeholder="Example: Personal Growth, Family, Financial, Friends (Community)"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="font-medium text-slate-100">
-                  2. Briefly describe your life today and where you&apos;d like to be in 10 years
+                  2. Briefly describe your life today and where you&apos;d like to be in 10
+                  years
                 </label>
                 <textarea
                   value={obLifeSummary}
@@ -414,7 +444,7 @@ export default function FoundationPage() {
                     autoGrow(e.currentTarget);
                   }}
                   rows={4}
-                  className="w-full overflow-hidden resize-none rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
+                  className="w-full overflow-hidden resize-none rounded-xl border border-slate-600 bg-slate-950/75 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
                   placeholder="Finances, family, community, personal growth now — and your ideal 10-year future."
                 />
               </div>
@@ -430,7 +460,7 @@ export default function FoundationPage() {
                     autoGrow(e.currentTarget);
                   }}
                   rows={2}
-                  className="w-full overflow-hidden resize-none rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
+                  className="w-full overflow-hidden resize-none rounded-xl border border-slate-600 bg-slate-950/75 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
                   placeholder="E.g. Christian, stoic, freedom lover, capitalist, other…"
                 />
               </div>
@@ -452,13 +482,15 @@ export default function FoundationPage() {
       )}
 
       {/* Header */}
-      <header className="space-y-1">
+      <header className="space-y-1 pt-2">
         <div className="flex items-center justify-between gap-2">
           <div>
             <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
               Today
             </p>
-            <h1 className="text-2xl font-semibold text-amber-50">{headerLabel}</h1>
+            <h1 className="text-2xl font-semibold text-amber-50">
+              {headerLabel}
+            </h1>
           </div>
 
           <div className="relative">
@@ -474,7 +506,7 @@ export default function FoundationPage() {
                 setGoldStreak(s);
                 persistGold(s);
               }}
-              className="peer w-[140px] rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200 outline-none [color-scheme:dark] focus:border-emerald-500"
+              className="peer w-[140px] rounded-full border border-slate-600 bg-slate-900 px-3 py-1 text-xs text-slate-200 outline-none [color-scheme:dark] focus:border-emerald-500"
             />
             <button
               type="button"
@@ -508,7 +540,7 @@ export default function FoundationPage() {
       </header>
 
       {/* Intention */}
-      <section className="space-y-2 rounded-2xl bg-slate-900/70 p-3 ring-1 ring-slate-800">
+      <section className="space-y-2 rounded-2xl bg-slate-900 p-3 ring-1 ring-slate-700">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
             Daily intention
@@ -536,12 +568,9 @@ export default function FoundationPage() {
         </div>
         <textarea
           value={intention}
-          onChange={(e) => {
-            setIntention(e.target.value);
-            autoGrow(e.currentTarget);
-          }}
+          onChange={autoGrowOnChange(setIntention)}
           rows={3}
-          className="w-full whitespace-pre-wrap break-words overflow-hidden resize-none rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
+          className="w-full whitespace-pre-wrap break-words overflow-hidden resize-none rounded-xl border border-slate-600 bg-slate-950/75 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
         />
       </section>
 
@@ -560,12 +589,12 @@ export default function FoundationPage() {
         </div>
 
         {newOpen && (
-          <div className="space-y-2 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800">
+          <div className="space-y-2 rounded-2xl bg-slate-900 p-3 ring-1 ring-slate-700">
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="New habit (e.g., Read 10 pages)"
-              className="w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
+              className="w-full rounded-xl border border-slate-600 bg-slate-950/75 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
             />
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
               <span>Frequency</span>
@@ -574,7 +603,7 @@ export default function FoundationPage() {
                 onChange={(e) =>
                   setNewSchedule(e.target.value as ScheduleType)
                 }
-                className="rounded-full border border-slate-700 bg-slate-950/60 px-2 py-1 text-slate-100 outline-none focus:border-emerald-500"
+                className="rounded-full border border-slate-600 bg-slate-950/75 px-2 py-1 text-slate-100 outline-none focus:border-emerald-500"
               >
                 <option value="daily">Daily</option>
                 <option value="weekdays">Weekdays</option>
@@ -591,7 +620,7 @@ export default function FoundationPage() {
                     max={7}
                     value={newXPerWeek}
                     onChange={(e) => setNewXPerWeek(e.target.value)}
-                    className="w-14 rounded-xl border border-slate-800 bg-slate-950/40 px-2 py-1 text-slate-100 outline-none focus:border-emerald-500"
+                    className="w-14 rounded-xl border border-slate-600 bg-slate-950/75 px-2 py-1 text-slate-100 outline-none focus:border-emerald-500"
                   />
                   <span>per week</span>
                 </>
@@ -610,7 +639,7 @@ export default function FoundationPage() {
           </div>
         )}
 
-        <div className="space-y-2">
+        <div className="space-y-2 pb-2">
           {activeRoutines.map((routine) => {
             const state = day[routine.id] ?? { done: false, notes: "" };
             const isDone = state.done;
@@ -632,7 +661,7 @@ export default function FoundationPage() {
             return (
               <div
                 key={routine.id}
-                className="space-y-2 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800"
+                className="space-y-2 rounded-2xl bg-slate-900 p-3 ring-1 ring-slate-700"
               >
                 <div className="flex items-center justify-between gap-2">
                   <button
@@ -640,8 +669,7 @@ export default function FoundationPage() {
                     className="flex flex-1 items-center gap-3 text-left"
                   >
                     <div
-                      className={`flex h-7 w-7 flex-none items-center justify-center rounded-full border-2
-                      ${
+                      className={`flex h-7 w-7 flex-none items-center justify-center rounded-full border-2 ${
                         isDone
                           ? "border-emerald-400 bg-emerald-500/10"
                           : "border-slate-600"
@@ -667,7 +695,6 @@ export default function FoundationPage() {
                       </div>
                     </div>
                   </button>
-
                   <button
                     onClick={() => deleteRoutineForFuture(routine.id)}
                     className="text-[11px] text-red-400 underline"
@@ -678,12 +705,9 @@ export default function FoundationPage() {
 
                 <textarea
                   value={state.notes}
-                  onChange={(e) => {
-                    updateNotes(routine.id, e.target.value);
-                    autoGrow(e.currentTarget);
-                  }}
+                  onChange={autoGrowNotes(routine.id)}
                   rows={2}
-                  className="w-full whitespace-pre-wrap break-words overflow-hidden resize-none rounded-xl border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-emerald-500"
+                  className="w-full whitespace-pre-wrap break-words overflow-hidden resize-none rounded-xl border border-slate-600 bg-slate-950/75 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-emerald-500"
                   placeholder="Notes or extra effort for this habit today…"
                 />
               </div>

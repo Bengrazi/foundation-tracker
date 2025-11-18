@@ -1,9 +1,9 @@
-// app/reflect/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
+import { applySavedTextSize } from "@/lib/textSize";
 
 type Mood = 1 | 2 | 3 | 4 | 5;
 
@@ -28,19 +28,27 @@ function todayStr() {
 }
 
 export default function ReflectPage() {
+  useEffect(() => {
+    applySavedTextSize();
+  }, []);
+
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const [reflections, setReflections] = useState<ReflectionsByDate>({});
   const [savedMessage, setSavedMessage] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+
     const storedDate = localStorage.getItem(DATE_KEY);
     if (storedDate) setSelectedDate(storedDate);
+
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     try {
       setReflections(JSON.parse(raw));
-    } catch {}
+    } catch {
+      // ignore
+    }
   }, []);
 
   const headerLabel = useMemo(
@@ -96,7 +104,7 @@ export default function ReflectPage() {
     <div className="min-h-[calc(100vh-4rem)] space-y-4 bg-slate-950 text-slate-100">
       <AuthGuardHeader />
 
-      <header className="space-y-1">
+      <header className="space-y-1 pt-2">
         <div className="flex items-center justify-between gap-2">
           <div>
             <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
@@ -117,7 +125,7 @@ export default function ReflectPage() {
                 setSelectedDate(next);
                 localStorage.setItem(DATE_KEY, next);
               }}
-              className="peer w-[140px] rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200 outline-none [color-scheme:dark] focus:border-emerald-500"
+              className="peer w-[140px] rounded-full border border-slate-600 bg-slate-900 px-3 py-1 text-xs text-slate-200 outline-none [color-scheme:dark] focus:border-emerald-500"
             />
             <button
               type="button"
@@ -167,7 +175,7 @@ export default function ReflectPage() {
         </div>
       </section>
 
-      <section className="space-y-2 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800">
+      <section className="space-y-2 rounded-2xl bg-slate-900 p-3 ring-1 ring-slate-700">
         <textarea
           value={current.text}
           onChange={(e) => {
@@ -175,7 +183,7 @@ export default function ReflectPage() {
             autoGrow(e.currentTarget);
           }}
           rows={4}
-          className="w-full whitespace-pre-wrap break-words overflow-hidden resize-none rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
+          className="w-full whitespace-pre-wrap break-words overflow-hidden resize-none rounded-xl border border-slate-600 bg-slate-950/75 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
           placeholder="Share about your day..."
         />
         <p className="flex items-center gap-1 text-[11px] text-slate-400">
