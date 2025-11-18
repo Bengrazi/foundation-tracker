@@ -32,3 +32,19 @@ textarea {
   scrollbar-width: thin;
   scrollbar-color: #1f2933 #020617;
 }
+/* Global font size controlled by data-text-size on <html> */
+html {
+  font-size: 14px; /* default / "small" */
+}
+
+html[data-text-size="small"] {
+  font-size: 14px;
+}
+
+html[data-text-size="medium"] {
+  font-size: 15px;
+}
+
+html[data-text-size="large"] {
+  font-size: 16px;
+}
