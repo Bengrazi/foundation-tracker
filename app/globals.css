@@ -1,13 +1,14 @@
+@import "tailwindcss";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Make sure this runs in the base layer, AFTER Tailwind's reset */
-@layer base {
-  html,
-  body {
-    @apply bg-slate-950 text-slate-100;
-  }
+/* Global dark background & text – using plain CSS, no @apply */
+html,
+body {
+  background-color: #020617; /* roughly Tailwind bg-slate-950 */
+  color: #f9fafb;            /* roughly text-slate-50 */
 }
 
 /* Smooth, rounded scrollbars (where they appear) */
