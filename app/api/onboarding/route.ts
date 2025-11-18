@@ -2,68 +2,63 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-function getOpenAIClient() {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "OPENAI_API_KEY is not set. Add it in your environment variables."
-    );
-  }
-  return new OpenAI({ apiKey });
+function client() {
+  const k = process.env.OPENAI_API_KEY;
+  if (!k) throw new Error("OPENAI_API_KEY is not set.");
+  return new OpenAI({ apiKey: k });
 }
 
+/**
+ * Input: { priorities, lifeSummary, ideology }
+ * Output (STRICT JSON):
+ * {
+ *   "keyTruth": string,
+ *   "board": [
+ *      {"name": string, "role": string, "why": string}, ...
+ *   ],
+ *   "goals": {
+ *      "3y": [{"title": string}, ... up to 3],
+ *      "1y": [{"title": string}, ... up to 3],
+ *      "6m": [{"title": string}, ... up to 3],
+ *      "1m": [{"title": string}, ... up to 3]
+ *   },
+ *   "aiVoice": string
+ * }
+ */
 export async function POST(req: Request) {
   const { priorities, lifeSummary, ideology } = await req.json();
 
-  const client = getOpenAIClient();
-
   const system = `
-You are helping a user set up their personal Foundation habit app.
+You are a pragmatic, optimistic planner. Output must be a SINGLE JSON object matching the required schema.
 
-You must respond as a STRICT JSON object with this shape:
-{
-  "keyTruth": string,
-  "goals": [
-    { "title": string, "horizon": "3y" | "1y" | "6m" | "1m" },
-    ...
-  ],
-  "aiVoice": string
-}
-
-- "keyTruth" is a single guiding belief or phrase for the next decade.
-- "goals" should contain exactly 4 goals: one for each horizon "3y", "1y", "6m", "1m".
-- Make each goal concrete and measurable enough to track.
-- "aiVoice" is 2–3 sentences describing the tone the AI should use with this user, based on their values and worldview.
-- Keep everything concise and free of JSON-breaking characters.
+Rules:
+- "board": 4–6 members max. Give realistic archetypes (e.g., "CFO mentor", "Family advisor", "Strength & cardio coach",
+  "Community connector", "Founder/Operator", "Stoic mentor", etc.). Include "why" for each (1 short sentence).
+- "goals": For each horizon (3y, 1y, 6m, 1m), propose 1–3 specific, measurable goals that, taken together,
+  realistically lead toward the user's 10-year intent implied in their summary. Be optimistic, but not delusional.
+- "keyTruth": 1 concise guiding belief for the next decade.
+- "aiVoice": 2–3 sentences describing tone for the app when speaking to this user.
+Keep the JSON compact and free of escape-breaking characters. No additional commentary.
 `;
 
-  const userContent = `
-Priorities ranked (Financial / Family / Friends (Community) / Personal Growth):
-${priorities}
-
-Life today and desired 10-year future:
-${lifeSummary}
-
-Ideology / worldview:
-${ideology}
+  const user = `
+Priorities (ranked): ${priorities}
+Life today & desired 10-year future: ${lifeSummary}
+Ideology / worldview: ${ideology}
 `;
 
-  const completion = await client.chat.completions.create({
+  const c = client();
+  const resp = await c.chat.completions.create({
     model: "gpt-4.1-mini",
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: system },
-      { role: "user", content: userContent },
+      { role: "user", content: user },
     ],
   });
 
-  const raw = completion.choices[0]?.message?.content ?? "{}";
-  let parsed: any;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    parsed = {};
-  }
-
-  return NextResponse.json(parsed);
+  const raw = resp.choices[0]?.message?.content ?? "{}";
+  let json: any;
+  try { json = JSON.parse(raw); } catch { json = {}; }
+  return NextResponse.json(json);
 }
