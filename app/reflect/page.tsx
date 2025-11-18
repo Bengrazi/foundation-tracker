@@ -32,7 +32,6 @@ export default function ReflectPage() {
   const [reflections, setReflections] = useState<ReflectionsByDate>({});
   const [savedMessage, setSavedMessage] = useState("");
 
-  // load
   useEffect(() => {
     if (typeof window === "undefined") return;
     const storedDate = localStorage.getItem(DATE_KEY);
@@ -93,19 +92,19 @@ export default function ReflectPage() {
     { value: 5, label: "Great", emoji: "😄" },
   ];
 
-return (
-  <div className="min-h-[calc(100vh-4rem)] space-y-4 bg-slate-950 text-slate-100">
-
+  return (
+    <div className="min-h-[calc(100vh-4rem)] space-y-4 bg-slate-950 text-slate-100">
       <AuthGuardHeader />
 
-      {/* Header */}
       <header className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <div>
             <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
               Reflection
             </p>
-            <h1 className="text-2xl font-semibold text-amber-50">{headerLabel}</h1>
+            <h1 className="text-2xl font-semibold text-amber-50">
+              {headerLabel}
+            </h1>
           </div>
 
           <div className="relative">
@@ -120,17 +119,28 @@ return (
               }}
               className="peer w-[140px] rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200 outline-none [color-scheme:dark] focus:border-emerald-500"
             />
-            <label
-              htmlFor={dateInputId}
-              className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-slate-400 peer-focus:text-emerald-400"
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                const input = document.getElementById(
+                  dateInputId
+                ) as HTMLInputElement | null;
+                const anyInput = input as any;
+                if (input && typeof anyInput.showPicker === "function") {
+                  anyInput.showPicker();
+                } else {
+                  input?.focus();
+                }
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-slate-400 hover:text-emerald-400"
             >
               📅
-            </label>
+            </button>
           </div>
         </div>
       </header>
 
-      {/* Mood */}
       <section className="space-y-2">
         <p className="text-xs font-medium text-slate-300">
           How are you feeling today?
@@ -143,12 +153,11 @@ return (
                 key={m.value}
                 type="button"
                 onClick={() => setMood(m.value)}
-                className={`flex h-9 w-9 items-center justify-center rounded-full border text-lg transition
-                  ${
-                    active
-                      ? "border-emerald-400 bg-emerald-500/10"
-                      : "border-slate-600 bg-slate-900"
-                  }`}
+                className={`flex h-9 w-9 items-center justify-center rounded-full border text-lg transition ${
+                  active
+                    ? "border-emerald-400 bg-emerald-500/10"
+                    : "border-slate-600 bg-slate-900"
+                }`}
                 title={m.label}
               >
                 {m.emoji}
@@ -158,7 +167,6 @@ return (
         </div>
       </section>
 
-      {/* Free write */}
       <section className="space-y-2 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800">
         <textarea
           value={current.text}

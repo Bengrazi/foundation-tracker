@@ -13,7 +13,7 @@ type Routine = {
   schedule: ScheduleType;
   xPerWeek?: number;
   createdAt: string; // YYYY-MM-DD
-  deletedFrom?: string; // YYYY-MM-DD (inactive on/after this date)
+  deletedFrom?: string; // YYYY-MM-DD
 };
 
 type DayRoutineState = { done: boolean; notes: string };
@@ -32,7 +32,7 @@ type OnboardingProfile = {
 };
 
 type GeneratedHorizon = "3y" | "1y" | "6m" | "1m";
-type GeneratedGoal = { title: string; horizon: GeneratedHorizon };
+
 type StoredGoal = {
   id: string;
   title: string;
@@ -65,7 +65,9 @@ function addMonths(date: Date, months: number) {
 
 // ---------- Component ----------
 export default function FoundationPage() {
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [selectedDate, setSelectedDate] = useState(
+    format(new Date(), "yyyy-MM-dd")
+  );
   const [intention, setIntention] = useState("");
   const [loadingIntention, setLoadingIntention] = useState(false);
 
@@ -73,7 +75,7 @@ export default function FoundationPage() {
   const [logs, setLogs] = useState<LogsByDate>({});
   const [goldStreak, setGoldStreak] = useState(0);
 
-  // New / edit
+  // New habit
   const [newOpen, setNewOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newSchedule, setNewSchedule] = useState<ScheduleType>("daily");
@@ -87,7 +89,10 @@ export default function FoundationPage() {
   const [obLoading, setObLoading] = useState(false);
   const [obError, setObError] = useState<string | null>(null);
 
-  const headerLabel = useMemo(() => format(parseISO(selectedDate), "EEEE, MMM d"), [selectedDate]);
+  const headerLabel = useMemo(
+    () => format(parseISO(selectedDate), "EEEE, MMM d"),
+    [selectedDate]
+  );
 
   // ---------- Load once ----------
   useEffect(() => {
@@ -104,12 +109,31 @@ export default function FoundationPage() {
         setRoutines(JSON.parse(rRaw));
       } catch {}
     } else {
-      // 4 default daily habits (removable)
       const defaults: Routine[] = [
-        { id: crypto.randomUUID(), name: "Complete A+ Problem for today", schedule: "daily", createdAt: today },
-        { id: crypto.randomUUID(), name: "Journal and reflect",           schedule: "daily", createdAt: today },
-        { id: crypto.randomUUID(), name: "Move your body 45+ min",        schedule: "daily", createdAt: today },
-        { id: crypto.randomUUID(), name: "Breathing exercises",           schedule: "daily", createdAt: today },
+        {
+          id: crypto.randomUUID(),
+          name: "Complete A+ Problem for today",
+          schedule: "daily",
+          createdAt: today,
+        },
+        {
+          id: crypto.randomUUID(),
+          name: "Journal and reflect",
+          schedule: "daily",
+          createdAt: today,
+        },
+        {
+          id: crypto.randomUUID(),
+          name: "Move your body 45+ min",
+          schedule: "daily",
+          createdAt: today,
+        },
+        {
+          id: crypto.randomUUID(),
+          name: "Breathing exercises",
+          schedule: "daily",
+          createdAt: today,
+        },
       ];
       setRoutines(defaults);
       localStorage.setItem(ROUTINE_STORAGE_KEY, JSON.stringify(defaults));
@@ -132,16 +156,22 @@ export default function FoundationPage() {
     if (!profileRaw) setShowOnboarding(true);
   }, []);
 
-  // ---------- Helpers: persistence ----------
-  const persistRoutines = (next: Routine[]) => localStorage.setItem(ROUTINE_STORAGE_KEY, JSON.stringify(next));
-  const persistLogs = (next: LogsByDate) => localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(next));
-  const persistGold = (n: number) => localStorage.setItem(GOLD_STORAGE_KEY, String(n));
+  const persistRoutines = (next: Routine[]) =>
+    localStorage.setItem(ROUTINE_STORAGE_KEY, JSON.stringify(next));
+  const persistLogs = (next: LogsByDate) =>
+    localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(next));
+  const persistGold = (n: number) =>
+    localStorage.setItem(GOLD_STORAGE_KEY, String(n));
 
-  // ---------- Profile getter ----------
   const getProfile = (): OnboardingProfile | null => {
-    const raw = typeof window !== "undefined" ? localStorage.getItem(PROFILE_STORAGE_KEY) : null;
+    if (typeof window === "undefined") return null;
+    const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
     if (!raw) return null;
-    try { return JSON.parse(raw) as OnboardingProfile; } catch { return null; }
+    try {
+      return JSON.parse(raw) as OnboardingProfile;
+    } catch {
+      return null;
+    }
   };
 
   // ---------- AI Intention ----------
@@ -150,7 +180,10 @@ export default function FoundationPage() {
       try {
         setLoadingIntention(true);
         const profile = getProfile();
-        const res = await fetch("/api/intention", { method: "POST", body: JSON.stringify({ profile }) });
+        const res = await fetch("/api/intention", {
+          method: "POST",
+          body: JSON.stringify({ profile }),
+        });
         const data = await res.json();
         if (data?.intention) setIntention(data.intention);
       } finally {
@@ -160,11 +193,12 @@ export default function FoundationPage() {
     run();
   }, []);
 
-  // ---------- Active routines for any date ----------
+  // ---------- Active routines ----------
   const getActiveRoutinesForDate = (date: string) =>
-    routines.filter((r) => !(r.createdAt > date || (r.deletedFrom && date >= r.deletedFrom)));
+    routines.filter(
+      (r) => !(r.createdAt > date || (r.deletedFrom && date >= r.deletedFrom))
+    );
 
-  // ---------- Gold streak calculation ----------
   const allActiveCompleteOn = (date: string, logsObj: LogsByDate) => {
     const active = getActiveRoutinesForDate(date);
     if (active.length === 0) return false;
@@ -184,7 +218,6 @@ export default function FoundationPage() {
     return streak;
   };
 
-  // ---------- Logs updates (auto-save + auto-streak) ----------
   const updateLogs = (updater: (prev: LogsByDate) => LogsByDate) => {
     setLogs((prev) => {
       const next = updater(prev);
@@ -212,7 +245,6 @@ export default function FoundationPage() {
       return { ...prev, [selectedDate]: day };
     });
 
-  // ---------- Routine CRUD ----------
   const addRoutine = () => {
     if (!newName.trim()) return;
     const routine: Routine = {
@@ -220,7 +252,9 @@ export default function FoundationPage() {
       name: newName.trim(),
       schedule: newSchedule,
       createdAt: selectedDate,
-      ...(newSchedule === "xPerWeek" ? { xPerWeek: Number(newXPerWeek) || 3 } : {}),
+      ...(newSchedule === "xPerWeek"
+        ? { xPerWeek: Number(newXPerWeek) || 3 }
+        : {}),
     };
     setRoutines((prev) => {
       const next = [...prev, routine];
@@ -233,26 +267,30 @@ export default function FoundationPage() {
     setNewOpen(false);
   };
 
-  // Delete only from selected day forward (keep history)
   const deleteRoutineForFuture = (id: string) =>
     setRoutines((prev) => {
-      const next = prev.map((r) => (r.id === id ? { ...r, deletedFrom: selectedDate } : r));
+      const next = prev.map((r) =>
+        r.id === id ? { ...r, deletedFrom: selectedDate } : r
+      );
       persistRoutines(next);
-      // update streak in case this changed “all active complete”
       const s = computeGoldStreakUpTo(selectedDate, logs);
       setGoldStreak(s);
       persistGold(s);
       return next;
     });
 
-  // ---------- Display helpers ----------
   const scheduleLabel = (r: Routine) => {
     switch (r.schedule) {
-      case "xPerWeek": return r.xPerWeek ? `${r.xPerWeek}×/week` : "Several times per week";
-      case "weekdays": return "Weekdays";
-      case "weekly":   return "Weekly";
-      case "monthly":  return "Monthly";
-      default:         return "Daily";
+      case "xPerWeek":
+        return r.xPerWeek ? `${r.xPerWeek}×/week` : "Several times per week";
+      case "weekdays":
+        return "Weekdays";
+      case "weekly":
+        return "Weekly";
+      case "monthly":
+        return "Monthly";
+      default:
+        return "Daily";
     }
   };
 
@@ -290,76 +328,37 @@ export default function FoundationPage() {
       };
       localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
 
-      // Seed goals if empty
-      const goalsRaw = localStorage.getItem(GOALS_STORAGE_KEY);
-      let existing: StoredGoal[] = [];
-      if (goalsRaw) {
-        try { existing = JSON.parse(goalsRaw); } catch { existing = []; }
-      }
-
-         const goals = data?.goals;
-      if (existing.length === 0 && goals && typeof goals === "object") {
+      // SIMPLE seeding: if no goals yet and we have a keyTruth,
+      // create ONE 3-year goal from that key truth.
+      const existingRaw = localStorage.getItem(GOALS_STORAGE_KEY);
+      if (!existingRaw && data?.keyTruth) {
         const baseDate = new Date();
-        const generated: StoredGoal[] = [];
-        let pinnedUsed = false; // only pin the first good 3-year goal
-
-        const normalizeTitle = (g: any): string => {
-          if (!g) return "";
-          if (typeof g === "string") return g.trim();
-          if (typeof g.title === "string" && g.title.trim()) return g.title.trim();
-          if (typeof g.goal === "string" && g.goal.trim()) return g.goal.trim();
-          if (typeof g.text === "string" && g.text.trim()) return g.text.trim();
-          return "";
-        };
-
-        const inject = (title: string, horizon: GeneratedHorizon, order: number) => {
-          if (!title) return;
-
-          let target = baseDate;
-          if (horizon === "3y") target = addMonths(baseDate, 36);
-          else if (horizon === "1y") target = addMonths(baseDate, 12);
-          else if (horizon === "6m") target = addMonths(baseDate, 6);
-          else target = addMonths(baseDate, 1);
-
-          const pinned = !pinnedUsed && horizon === "3y";
-          if (pinned) pinnedUsed = true;
-
-          generated.push({
+        const target = addMonths(baseDate, 36);
+        const seeded: StoredGoal[] = [
+          {
             id: crypto.randomUUID(),
-            title,
-            horizon,
+            title: `Key truth: ${String(data.keyTruth).trim()}`,
+            horizon: "3y",
             status: "not_started",
-            pinned,
+            pinned: true,
             targetDate: formatDate(target),
-            sortIndex: order + 1,
-          });
-        };
-
-        (["3y", "1y", "6m", "1m"] as GeneratedHorizon[]).forEach((h) => {
-          const arr = Array.isArray(goals[h]) ? (goals[h] as any[]) : [];
-          // at most 2 goals per horizon
-          arr.slice(0, 2).forEach((g, idx) => {
-            const title = normalizeTitle(g);
-            inject(title, h, idx);
-          });
-        });
-
-        if (generated.length > 0) {
-          localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(generated));
-        }
+            sortIndex: 1,
+          },
+        ];
+        localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(seeded));
       }
-
 
       setShowOnboarding(false);
     } catch (e) {
       console.error(e);
-      setObError("Something went wrong creating your starter goals. You can always add your own later.");
+      setObError(
+        "Something went wrong creating your starter profile. You can still use the app normally."
+      );
     } finally {
       setObLoading(false);
     }
   };
 
-  // ---------- UI ----------
   const dateInputId = "foundation-date-input";
 
   const autoGrow = (el: HTMLTextAreaElement | null) => {
@@ -368,32 +367,38 @@ export default function FoundationPage() {
     el.style.height = `${el.scrollHeight}px`;
   };
 
- return (
-  <div className="min-h-[calc(100vh-4rem)] space-y-4 bg-slate-950 text-slate-100">
-
+  return (
+    <div className="min-h-[calc(100vh-4rem)] space-y-4 bg-slate-950 text-slate-100">
       <AuthGuardHeader />
 
       {/* Onboarding overlay */}
       {showOnboarding && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-4">
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-slate-900 p-4 shadow-2xl ring-1 ring-amber-500/20">
-            <h2 className="mb-2 text-lg font-semibold text-amber-50">Welcome to Foundation</h2>
+            <h2 className="mb-2 text-lg font-semibold text-amber-50">
+              Welcome to Foundation
+            </h2>
             <p className="mb-3 text-xs text-slate-300">
-              This quick primer is <span className="font-semibold">private</span> and only used to personalize your AI
-              intentions, goals, and insights. It&apos;s a one‑time thing.
+              This quick primer is <span className="font-semibold">private</span> and only used to
+              personalize your AI intentions, goals, and insights. It&apos;s a one-time thing.
             </p>
 
             <div className="space-y-3 text-xs">
               <div className="space-y-1">
-                <label className="font-medium text-slate-100">1. Rank from most to least important for you</label>
+                <label className="font-medium text-slate-100">
+                  1. Rank from most to least important for you
+                </label>
                 <p className="text-[11px] text-slate-400">
                   Use <strong>Financial, Family, Friends (Community), Personal Growth</strong>.
                 </p>
                 <textarea
                   value={obPriorities}
-                  onChange={(e) => { setObPriorities(e.target.value); autoGrow(e.currentTarget); }}
+                  onChange={(e) => {
+                    setObPriorities(e.target.value);
+                    autoGrow(e.currentTarget);
+                  }}
                   rows={2}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
+                  className="w-full overflow-hidden resize-none rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
                   placeholder="Example: Personal Growth, Family, Financial, Friends (Community)"
                 />
               </div>
@@ -404,20 +409,28 @@ export default function FoundationPage() {
                 </label>
                 <textarea
                   value={obLifeSummary}
-                  onChange={(e) => { setObLifeSummary(e.target.value); autoGrow(e.currentTarget); }}
+                  onChange={(e) => {
+                    setObLifeSummary(e.target.value);
+                    autoGrow(e.currentTarget);
+                  }}
                   rows={4}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
-                  placeholder="Finances, family, community, personal growth now — and your ideal 10‑year future."
+                  className="w-full overflow-hidden resize-none rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
+                  placeholder="Finances, family, community, personal growth now — and your ideal 10-year future."
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-medium text-slate-100">3. How would you describe your ideology or worldview?</label>
+                <label className="font-medium text-slate-100">
+                  3. How would you describe your ideology or worldview?
+                </label>
                 <textarea
                   value={obIdeology}
-                  onChange={(e) => { setObIdeology(e.target.value); autoGrow(e.currentTarget); }}
+                  onChange={(e) => {
+                    setObIdeology(e.target.value);
+                    autoGrow(e.currentTarget);
+                  }}
                   rows={2}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
+                  className="w-full overflow-hidden resize-none rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
                   placeholder="E.g. Christian, stoic, freedom lover, capitalist, other…"
                 />
               </div>
@@ -442,7 +455,9 @@ export default function FoundationPage() {
       <header className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Today</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
+              Today
+            </p>
             <h1 className="text-2xl font-semibold text-amber-50">{headerLabel}</h1>
           </div>
 
@@ -455,44 +470,64 @@ export default function FoundationPage() {
                 const next = e.target.value;
                 setSelectedDate(next);
                 localStorage.setItem(DATE_STORAGE_KEY, next);
-                // recalc streak on date switch
                 const s = computeGoldStreakUpTo(next, logs);
                 setGoldStreak(s);
                 persistGold(s);
               }}
-              className="peer w-[140px] rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs
-                         text-slate-200 outline-none [color-scheme:dark] focus:border-emerald-500"
+              className="peer w-[140px] rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200 outline-none [color-scheme:dark] focus:border-emerald-500"
             />
-            <label
-              htmlFor={dateInputId}
-              className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-slate-400 peer-focus:text-emerald-400"
-              title="Open calendar"
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                const input = document.getElementById(
+                  dateInputId
+                ) as HTMLInputElement | null;
+                const anyInput = input as any;
+                if (input && typeof anyInput.showPicker === "function") {
+                  anyInput.showPicker();
+                } else {
+                  input?.focus();
+                }
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-slate-400 hover:text-emerald-400"
             >
               📅
-            </label>
+            </button>
           </div>
         </div>
 
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-slate-400">{completedCount}/{activeRoutines.length} habits today</span>
-          <span className="text-amber-400">Gold streak: {goldStreak} day{goldStreak === 1 ? "" : "s"}</span>
+          <span className="text-slate-400">
+            {completedCount}/{activeRoutines.length} habits today
+          </span>
+          <span className="text-amber-400">
+            Gold streak: {goldStreak} day{goldStreak === 1 ? "" : "s"}
+          </span>
         </div>
       </header>
 
       {/* Intention */}
       <section className="space-y-2 rounded-2xl bg-slate-900/70 p-3 ring-1 ring-slate-800">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Daily intention</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Daily intention
+          </h2>
           <button
             disabled={loadingIntention}
             onClick={async () => {
               try {
                 setLoadingIntention(true);
                 const profile = getProfile();
-                const res = await fetch("/api/intention", { method: "POST", body: JSON.stringify({ profile }) });
+                const res = await fetch("/api/intention", {
+                  method: "POST",
+                  body: JSON.stringify({ profile }),
+                });
                 const data = await res.json();
                 if (data?.intention) setIntention(data.intention);
-              } finally { setLoadingIntention(false); }
+              } finally {
+                setLoadingIntention(false);
+              }
             }}
             className="text-[11px] text-emerald-400 underline disabled:opacity-40"
           >
@@ -501,41 +536,45 @@ export default function FoundationPage() {
         </div>
         <textarea
           value={intention}
-          onChange={(e) => { setIntention(e.target.value); autoGrow(e.currentTarget); }}
+          onChange={(e) => {
+            setIntention(e.target.value);
+            autoGrow(e.currentTarget);
+          }}
           rows={3}
-          className="w-full whitespace-pre-wrap break-words rounded-xl border border-slate-800 bg-slate-950/40
-                     px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
+          className="w-full whitespace-pre-wrap break-words overflow-hidden resize-none rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
         />
       </section>
 
-      {/* Daily habits */}
+      {/* Habits */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Daily habits</h2>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setNewOpen((x) => !x)} className="text-[11px] text-emerald-400">
-              {newOpen ? "Cancel" : "+ Add"}
-            </button>
-          </div>
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Daily habits
+          </h2>
+          <button
+            onClick={() => setNewOpen((x) => !x)}
+            className="text-[11px] text-emerald-400"
+          >
+            {newOpen ? "Cancel" : "+ Add"}
+          </button>
         </div>
 
-        {/* New habit form */}
         {newOpen && (
           <div className="space-y-2 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800">
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="New habit (e.g., Read 10 pages)"
-              className="w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-100
-                         outline-none focus:border-emerald-500"
+              className="w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
             />
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
               <span>Frequency</span>
               <select
                 value={newSchedule}
-                onChange={(e) => setNewSchedule(e.target.value as ScheduleType)}
-                className="rounded-full border border-slate-700 bg-slate-950/60 px-2 py-1 text-slate-100
-                           outline-none focus:border-emerald-500"
+                onChange={(e) =>
+                  setNewSchedule(e.target.value as ScheduleType)
+                }
+                className="rounded-full border border-slate-700 bg-slate-950/60 px-2 py-1 text-slate-100 outline-none focus:border-emerald-500"
               >
                 <option value="daily">Daily</option>
                 <option value="weekdays">Weekdays</option>
@@ -547,34 +586,35 @@ export default function FoundationPage() {
                 <>
                   <span>×</span>
                   <input
-                    type="number" min={1} max={7} value={newXPerWeek}
+                    type="number"
+                    min={1}
+                    max={7}
+                    value={newXPerWeek}
                     onChange={(e) => setNewXPerWeek(e.target.value)}
-                    className="w-14 rounded-xl border border-slate-800 bg-slate-950/40 px-2 py-1 text-slate-100
-                               outline-none focus:border-emerald-500"
+                    className="w-14 rounded-xl border border-slate-800 bg-slate-950/40 px-2 py-1 text-slate-100 outline-none focus:border-emerald-500"
                   />
                   <span>per week</span>
                 </>
               )}
             </div>
             <p className="text-[11px] text-slate-500">
-              This habit will exist from <strong>{selectedDate}</strong> onward until you remove it.
+              This habit will exist from <strong>{selectedDate}</strong> onward
+              until you remove it.
             </p>
             <button
               onClick={addRoutine}
-              className="w-full rounded-xl bg-emerald-500 py-2 text-sm font-medium text-slate-950 shadow-sm"
+              className="w-full rounded-xl bg-emerald-500 py-2 text-sm font-medium text-slate-950"
             >
               Save habit
             </button>
           </div>
         )}
 
-        {/* Habits list */}
         <div className="space-y-2">
           {activeRoutines.map((routine) => {
             const state = day[routine.id] ?? { done: false, notes: "" };
             const isDone = state.done;
 
-            // per-habit streak (to selected date)
             let streak = 0;
             {
               let cursor = parseISO(selectedDate);
@@ -590,37 +630,60 @@ export default function FoundationPage() {
             }
 
             return (
-              <div key={routine.id} className="space-y-2 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800">
+              <div
+                key={routine.id}
+                className="space-y-2 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800"
+              >
                 <div className="flex items-center justify-between gap-2">
-                  <button onClick={() => toggleRoutine(routine.id)} className="flex flex-1 items-center gap-3 text-left">
+                  <button
+                    onClick={() => toggleRoutine(routine.id)}
+                    className="flex flex-1 items-center gap-3 text-left"
+                  >
                     <div
                       className={`flex h-7 w-7 flex-none items-center justify-center rounded-full border-2
-                        ${isDone ? "border-emerald-400 bg-emerald-500/10" : "border-slate-600"}`}
+                      ${
+                        isDone
+                          ? "border-emerald-400 bg-emerald-500/10"
+                          : "border-slate-600"
+                      }`}
                       aria-checked={isDone}
                       role="checkbox"
                     >
-                      {isDone && <span className="text-xs text-emerald-300">●</span>}
+                      {isDone && (
+                        <span className="text-xs text-emerald-300">●</span>
+                      )}
                     </div>
                     <div className="space-y-1">
-                      <p className="whitespace-pre-wrap break-words text-sm font-medium text-slate-50">{routine.name}</p>
+                      <p className="whitespace-pre-wrap break-words text-sm font-medium text-slate-50">
+                        {routine.name}
+                      </p>
                       <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                         <span>{scheduleLabel(routine)}</span>
-                        {streak > 0 && <span className="text-amber-400">• 🔥 {streak}-day streak</span>}
+                        {streak > 0 && (
+                          <span className="text-amber-400">
+                            • 🔥 {streak}-day streak
+                          </span>
+                        )}
                       </div>
                     </div>
                   </button>
 
-                  <button onClick={() => deleteRoutineForFuture(routine.id)} className="text-[11px] text-red-400 underline">
+                  <button
+                    onClick={() => deleteRoutineForFuture(routine.id)}
+                    className="text-[11px] text-red-400 underline"
+                  >
                     Remove →
                   </button>
                 </div>
 
                 <textarea
                   value={state.notes}
-                  onChange={(e) => { updateNotes(routine.id, e.target.value); autoGrow(e.currentTarget); }}
+                  onChange={(e) => {
+                    updateNotes(routine.id, e.target.value);
+                    autoGrow(e.currentTarget);
+                  }}
                   rows={2}
-                  className="w-full whitespace-pre-wrap break-words rounded-xl border border-slate-800 bg-slate-950/40
-                             px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-emerald-500"
+                  className="w-full whitespace-pre-wrap break-words overflow-hidden resize-none rounded-xl border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-emerald-500"
                   placeholder="Notes or extra effort for this habit today…"
                 />
               </div>
