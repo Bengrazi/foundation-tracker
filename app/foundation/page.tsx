@@ -149,18 +149,6 @@ export default function FoundationPage() {
           schedule: "daily",
           createdAt: todayStr,
         },
-        {
-          id: crypto.randomUUID(),
-          name: "Eat 150g+ of protein",
-          schedule: "daily",
-          createdAt: todayStr,
-        },
-        {
-          id: crypto.randomUUID(),
-          name: "Take supplements",
-          schedule: "daily",
-          createdAt: todayStr,
-        },
       ];
       setRoutines(defaults);
       window.localStorage.setItem(
@@ -436,13 +424,12 @@ export default function FoundationPage() {
               title: g.title,
               horizon: g.horizon,
               status: "not_started",
-              pinned: horizonIndex === 0, // pin the furthest-out one
+              pinned: horizonIndex === 0,
               targetDate: formatDate(target),
               sortIndex: horizonIndex,
             });
           };
 
-          // Optional key truth as a "3y" style anchor goal
           if (profile.keyTruth) {
             pushGoal(
               {
@@ -482,12 +469,12 @@ export default function FoundationPage() {
 
       {/* Onboarding overlay */}
       {showOnboarding && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-4 shadow-xl">
-            <h2 className="mb-2 text-lg font-semibold">
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-4">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-slate-900 p-4 shadow-2xl ring-1 ring-amber-500/20">
+            <h2 className="mb-2 text-lg font-semibold text-amber-50">
               Welcome to Foundation
             </h2>
-            <p className="mb-3 text-xs text-slate-600">
+            <p className="mb-3 text-xs text-slate-300">
               This quick primer is{" "}
               <span className="font-semibold">private</span> and only used to
               personalize your AI intentions, goals, and insights. It&apos;s a
@@ -496,24 +483,27 @@ export default function FoundationPage() {
 
             <div className="space-y-3 text-xs">
               <div className="space-y-1">
-                <label className="font-medium">
+                <label className="font-medium text-slate-100">
                   1. Rank from most to least important for you
                 </label>
-                <p className="text-[11px] text-slate-500">
-                  Use the words <strong>Financial, Family, Friends
-                  (Community), Personal Growth</strong>.
+                <p className="text-[11px] text-slate-400">
+                  Use the words{" "}
+                  <strong>
+                    Financial, Family, Friends (Community), Personal Growth
+                  </strong>
+                  .
                 </p>
                 <textarea
                   value={obPriorities}
                   onChange={(e) => setObPriorities(e.target.value)}
                   rows={2}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 outline-none focus:border-amber-500"
                   placeholder="Example: Personal Growth, Family, Financial, Friends (Community)"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-medium">
+                <label className="font-medium text-slate-100">
                   2. Briefly describe your life today and where you&apos;d like
                   to be in 10 years
                 </label>
@@ -521,33 +511,33 @@ export default function FoundationPage() {
                   value={obLifeSummary}
                   onChange={(e) => setObLifeSummary(e.target.value)}
                   rows={4}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 outline-none focus:border-amber-500"
                   placeholder="Finances, family, community, personal growth now – and your ideal 10-year future."
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-medium">
+                <label className="font-medium text-slate-100">
                   3. How would you describe your ideology or worldview?
                 </label>
                 <textarea
                   value={obIdeology}
                   onChange={(e) => setObIdeology(e.target.value)}
                   rows={2}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 outline-none focus:border-amber-500"
                   placeholder="E.g. Christian, stoic, freedom lover, capitalist, other…"
                 />
               </div>
 
               {obError && (
-                <p className="text-[11px] text-red-500">{obError}</p>
+                <p className="text-[11px] text-red-400">{obError}</p>
               )}
 
               <div className="mt-2 flex items-center justify-end gap-2">
                 <button
                   disabled={obLoading}
                   onClick={handleOnboardingSubmit}
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow disabled:opacity-50"
                 >
                   {obLoading ? "Creating your foundations..." : "Save & continue"}
                 </button>
@@ -558,13 +548,15 @@ export default function FoundationPage() {
       )}
 
       {/* Header with date + gold streak */}
-      <header className="space-y-2">
+      <header className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
               Today
             </p>
-            <h1 className="text-3xl font-semibold">{headerLabel}</h1>
+            <h1 className="text-2xl font-semibold text-amber-50">
+              {headerLabel}
+            </h1>
           </div>
           <input
             type="date"
@@ -576,24 +568,24 @@ export default function FoundationPage() {
                 window.localStorage.setItem(DATE_STORAGE_KEY, nextDate);
               }
             }}
-            className="rounded-xl border border-slate-200 px-2 py-1 text-xs outline-none focus:border-slate-400"
+            className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200 outline-none focus:border-amber-500"
           />
         </div>
-        <p className="text-sm text-slate-600">
-          Foundation progress: {completedCount}/{activeRoutines.length} routines
-          done
-        </p>
-        <p className="text-xs font-semibold text-amber-500">
-          Gold streak: {goldStreak} day{goldStreak === 1 ? "" : "s"} in a row
-          with all foundations completed
-        </p>
+        <div className="flex items-center justify-between text-[11px] text-slate-400">
+          <span>
+            {completedCount}/{activeRoutines.length} habits today
+          </span>
+          <span className="text-amber-400">
+            Gold streak: {goldStreak} day{goldStreak === 1 ? "" : "s"}
+          </span>
+        </div>
       </header>
 
       {/* Intention */}
-      <section className="space-y-2">
+      <section className="space-y-2 rounded-2xl bg-slate-900/70 p-3 ring-1 ring-slate-800">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-medium text-slate-800">
-            Today&apos;s intention
+          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Daily intention
           </h2>
           <button
             disabled={loadingIntention}
@@ -611,58 +603,58 @@ export default function FoundationPage() {
                 setLoadingIntention(false);
               }
             }}
-            className="text-xs underline text-slate-500 disabled:opacity-40"
+            className="text-[11px] text-emerald-400 underline disabled:opacity-40"
           >
-            {loadingIntention ? "Thinking..." : "New suggestion"}
+            {loadingIntention ? "Thinking..." : "New"}
           </button>
         </div>
         <textarea
           value={intention}
           onChange={(e) => setIntention(e.target.value)}
           rows={3}
-          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+          className="w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
         />
       </section>
 
       {/* Foundations header */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-slate-800">
-            Your foundations
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Daily habits
           </h2>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setNewOpen((x) => !x)}
-              className="rounded-full border border-slate-300 px-3 py-1 text-[11px] text-slate-600"
+              className="text-[11px] text-emerald-400"
             >
-              {newOpen ? "Cancel" : "New foundation"}
+              {newOpen ? "Cancel" : "+ Add"}
             </button>
             <button
               onClick={saveDayAndUpdateStreak}
-              className="rounded-full bg-amber-500 px-3 py-1 text-[11px] font-semibold text-white"
+              className="rounded-full bg-amber-500 px-3 py-1 text-[11px] font-semibold text-slate-950 shadow-sm"
             >
-              Save day & update streak
+              Save day
             </button>
           </div>
         </div>
 
         {/* New foundation form */}
         {newOpen && (
-          <div className="space-y-2 rounded-2xl border border-slate-200 bg-white px-3 py-3">
+          <div className="space-y-2 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800">
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Foundation name (e.g. Walk outside 45 min)"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+              placeholder="New habit (e.g. Read 10 pages)"
+              className="w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
             />
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-slate-600">How often?</span>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+              <span>Frequency</span>
               <select
                 value={newSchedule}
                 onChange={(e) =>
                   setNewSchedule(e.target.value as ScheduleType)
                 }
-                className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs outline-none"
+                className="rounded-full border border-slate-700 bg-slate-950/60 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-emerald-500"
               >
                 <option value="daily">Daily</option>
                 <option value="weekdays">Weekdays</option>
@@ -679,27 +671,27 @@ export default function FoundationPage() {
                     max={7}
                     value={newXPerWeek}
                     onChange={(e) => setNewXPerWeek(e.target.value)}
-                    className="w-14 rounded-xl border border-slate-200 px-2 py-1 text-xs outline-none focus:border-slate-400"
+                    className="w-14 rounded-xl border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-emerald-500"
                   />
                   <span>per week</span>
                 </>
               )}
             </div>
             <p className="text-[11px] text-slate-500">
-              This foundation will exist from <strong>{selectedDate}</strong> and
-              every day going forward until you remove it.
+              This habit will exist from <strong>{selectedDate}</strong> onward
+              until you remove it.
             </p>
             <button
               onClick={addRoutine}
-              className="w-full rounded-xl bg-emerald-600 py-2 text-sm font-medium text-white"
+              className="w-full rounded-xl bg-emerald-500 py-2 text-sm font-medium text-slate-950 shadow-sm"
             >
-              Save foundation
+              Save habit
             </button>
           </div>
         )}
 
         {/* Foundations list */}
-        <div className="space-y-3">
+        <div className="space-y-2">
           {activeRoutines.map((routine) => {
             const dayState = day[routine.id] ?? { done: false, notes: "" };
             const isDone = dayState.done;
@@ -708,55 +700,53 @@ export default function FoundationPage() {
             return (
               <div
                 key={routine.id}
-                className={`rounded-2xl border px-3 py-3 ${
-                  isDone
-                    ? "border-emerald-400 bg-emerald-50"
-                    : "border-slate-200 bg-white"
-                }`}
+                className="space-y-2 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800"
               >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center justify-between gap-2">
                   <button
                     onClick={() => toggleRoutine(routine.id)}
                     className="flex flex-1 items-center gap-3 text-left"
                   >
                     <div
-                      className={`mt-1 flex h-7 w-7 flex-none items-center justify-center rounded-full border text-xs font-semibold ${
+                      className={`flex h-7 w-7 flex-none items-center justify-center rounded-full border-2 ${
                         isDone
-                          ? "border-emerald-500 bg-emerald-500 text-white"
-                          : "border-slate-300 text-slate-400"
+                          ? "border-emerald-400 bg-emerald-500/10"
+                          : "border-slate-600 bg-transparent"
                       }`}
                     >
-                      {isDone ? "✓" : ""}
+                      {isDone && (
+                        <span className="text-xs text-emerald-300">●</span>
+                      )}
                     </div>
                     <div className="space-y-1">
-                      <p className="text-base font-semibold">
+                      <p className="text-sm font-medium text-slate-50">
                         {routine.name}
                       </p>
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                        <span>• {scheduleLabel(routine)}</span>
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                        <span>{scheduleLabel(routine)}</span>
                         {streak > 0 && (
-                          <span>• 🔥 {streak}-day streak</span>
+                          <span className="text-amber-400">
+                            • 🔥 {streak}-day streak
+                          </span>
                         )}
                       </div>
                     </div>
                   </button>
                   <button
                     onClick={() => deleteRoutineForFuture(routine.id)}
-                    className="text-[11px] text-slate-400 underline"
+                    className="text-[11px] text-slate-500 underline"
                   >
-                    Delete from today →
+                    Remove →
                   </button>
                 </div>
 
-                <div className="mt-2">
-                  <textarea
-                    value={dayState.notes}
-                    onChange={(e) => updateNotes(routine.id, e.target.value)}
-                    rows={2}
-                    className="w-full rounded-xl border border-slate-200 px-2 py-1 text-xs outline-none focus:border-slate-400"
-                    placeholder="Notes or extra effort for this foundation today…"
-                  />
-                </div>
+                <textarea
+                  value={dayState.notes}
+                  onChange={(e) => updateNotes(routine.id, e.target.value)}
+                  rows={2}
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-emerald-500"
+                  placeholder="Notes or extra effort for this habit today…"
+                />
               </div>
             );
           })}
