@@ -133,8 +133,9 @@ export default function GoalsPage() {
     setTimeout(() => setSavedMessage(""), 1500);
   };
 
-  return (
-    <div className="space-y-4 text-slate-100">
+ return (
+  <div className="min-h-[calc(100vh-4rem)] space-y-4 bg-slate-950 text-slate-100">
+
       <AuthGuardHeader />
 
       <header className="space-y-2">

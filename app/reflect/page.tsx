@@ -93,8 +93,9 @@ export default function ReflectPage() {
     { value: 5, label: "Great", emoji: "😄" },
   ];
 
-  return (
-    <div className="space-y-4 text-slate-100">
+return (
+  <div className="min-h-[calc(100vh-4rem)] space-y-4 bg-slate-950 text-slate-100">
+
       <AuthGuardHeader />
 
       {/* Header */}

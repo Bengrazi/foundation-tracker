@@ -14,8 +14,8 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="sticky bottom-0 flex w-full justify-center bg-slate-950/90 pb-3 pt-2 backdrop-blur">
-      <div className="flex w-full max-w-md items-center justify-between rounded-full border border-slate-800 bg-slate-900/80 px-2 py-1 text-[11px]">
+    <nav className="fixed bottom-0 left-1/2 z-30 w-full max-w-md -translate-x-1/2 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent pb-3">
+      <div className="mx-auto flex w-[92%] items-center justify-between rounded-full border border-slate-800 bg-slate-900/95 px-2 py-1 text-[11px] shadow-lg shadow-black/40">
         {tabs.map((tab) => {
           const active = pathname === tab.href;
           return (
@@ -24,7 +24,7 @@ export default function BottomNav() {
               href={tab.href}
               className={`flex-1 rounded-full px-2 py-1 text-center transition ${
                 active
-                  ? "bg-emerald-500 text-slate-950 font-semibold shadow-sm"
+                  ? "bg-emerald-500 text-slate-950 font-semibold"
                   : "text-slate-400 hover:text-slate-100"
               }`}
             >

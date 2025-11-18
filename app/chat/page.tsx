@@ -96,8 +96,9 @@ export default function ChatPage() {
     }
   };
 
-  return (
-    <div className="flex h-full flex-col gap-3 text-slate-100">
+return (
+  <div className="min-h-[calc(100vh-4rem)] flex flex-col gap-3 bg-slate-950 text-slate-100">
+
       <AuthGuardHeader />
 
       <header className="space-y-1">

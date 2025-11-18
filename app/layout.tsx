@@ -32,9 +32,11 @@ export default function RootLayout({
           " bg-slate-950 text-slate-100 antialiased selection:bg-emerald-500/40"
         }
       >
-        <div className="mx-auto flex min-h-screen max-w-md flex-col bg-slate-950 pb-16">
-          <main className="flex-1 px-4 pt-4">{children}</main>
-          <BottomNav />
+        <div className="flex min-h-screen justify-center bg-slate-950">
+          <div className="flex w-full max-w-md flex-col pb-16">
+            <main className="flex-1 bg-slate-950 px-4 pt-4">{children}</main>
+            <BottomNav />
+          </div>
         </div>
       </body>
     </html>

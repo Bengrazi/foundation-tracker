@@ -297,10 +297,11 @@ export default function FoundationPage() {
         try { existing = JSON.parse(goalsRaw); } catch { existing = []; }
       }
 
-      const goals = data?.goals;
+         const goals = data?.goals;
       if (existing.length === 0 && goals && typeof goals === "object") {
         const baseDate = new Date();
         const generated: StoredGoal[] = [];
+        let pinnedUsed = false; // only pin the first good 3-year goal
 
         const normalizeTitle = (g: any): string => {
           if (!g) return "";
@@ -313,18 +314,22 @@ export default function FoundationPage() {
 
         const inject = (title: string, horizon: GeneratedHorizon, order: number) => {
           if (!title) return;
+
           let target = baseDate;
           if (horizon === "3y") target = addMonths(baseDate, 36);
           else if (horizon === "1y") target = addMonths(baseDate, 12);
           else if (horizon === "6m") target = addMonths(baseDate, 6);
           else target = addMonths(baseDate, 1);
 
+          const pinned = !pinnedUsed && horizon === "3y";
+          if (pinned) pinnedUsed = true;
+
           generated.push({
             id: crypto.randomUUID(),
             title,
             horizon,
             status: "not_started",
-            pinned: order === 0,
+            pinned,
             targetDate: formatDate(target),
             sortIndex: order + 1,
           });
@@ -332,7 +337,8 @@ export default function FoundationPage() {
 
         (["3y", "1y", "6m", "1m"] as GeneratedHorizon[]).forEach((h) => {
           const arr = Array.isArray(goals[h]) ? (goals[h] as any[]) : [];
-          arr.slice(0, 3).forEach((g, idx) => {
+          // at most 2 goals per horizon
+          arr.slice(0, 2).forEach((g, idx) => {
             const title = normalizeTitle(g);
             inject(title, h, idx);
           });
@@ -362,8 +368,9 @@ export default function FoundationPage() {
     el.style.height = `${el.scrollHeight}px`;
   };
 
-  return (
-    <div className="space-y-4 text-slate-100">
+ return (
+  <div className="min-h-[calc(100vh-4rem)] space-y-4 bg-slate-950 text-slate-100">
+
       <AuthGuardHeader />
 
       {/* Onboarding overlay */}
