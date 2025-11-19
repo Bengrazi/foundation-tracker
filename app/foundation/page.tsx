@@ -254,26 +254,35 @@ export default function FoundationPage() {
 
       // If there are ZERO foundations at all, seed defaults starting today.
       if (!fdError && foundationsLoaded.length === 0) {
-        const todayKey = dateKey(new Date());
-        const inserts = DEFAULT_FOUNDATIONS.map((f) => ({
-          ...f,
-          user_id: auth.user.id,
-          start_date: todayKey,
-          end_date: null,
-        }));
-
-        const { data: seeded, error: seedError } = await supabase
+        // Double-check: does the user have ANY foundations? 
+        // (If we are viewing a past date, foundationsLoaded might be empty but user has future habits)
+        const { count } = await supabase
           .from("foundations")
-          .insert(inserts)
-          .select("*");
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", auth.user.id);
 
-        if (seedError) {
-          console.error("Error seeding default foundations", seedError);
-          alert("Failed to seed default habits. Please try resetting again.");
-        }
+        if (count === 0) {
+          const todayKey = dateKey(new Date());
+          const inserts = DEFAULT_FOUNDATIONS.map((f) => ({
+            ...f,
+            user_id: auth.user.id,
+            start_date: todayKey,
+            end_date: null,
+          }));
 
-        if (!seedError && seeded) {
-          foundationsLoaded.push(...(seeded as Foundation[]));
+          const { data: seeded, error: seedError } = await supabase
+            .from("foundations")
+            .insert(inserts)
+            .select("*");
+
+          if (seedError) {
+            console.error("Error seeding default foundations", seedError);
+            alert("Failed to seed default habits. Please try resetting again.");
+          }
+
+          if (!seedError && seeded) {
+            foundationsLoaded.push(...(seeded as Foundation[]));
+          }
         }
       }
 
