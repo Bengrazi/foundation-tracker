@@ -29,10 +29,10 @@ export async function POST(req: Request) {
   const profileText = profile
     ? `
 User priorities: ${profile.priorities ?? ""}
-Life summary / 10-year vision: ${profile.lifeSummary ?? ""}
+Life summary / 10-year vision: ${profile.life_summary ?? ""}
 Ideology / worldview: ${profile.ideology ?? ""}
-Key truth: ${profile.keyTruth ?? ""}
-Preferred tone: ${profile.aiVoice ?? ""}
+Key truth: ${profile.key_truth ?? ""}
+Preferred tone: ${profile.ai_voice ?? ""}
 `
     : "";
 

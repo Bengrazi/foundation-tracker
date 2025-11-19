@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
 import { applySavedTextSize } from "@/lib/textSize";
+import { supabase } from "@/lib/supabaseClient";
 
 type ChatMessage = {
   id: string;
@@ -15,9 +16,26 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
     applySavedTextSize();
+
+    async function loadProfile() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+
+      if (data) setProfile(data);
+    }
+    loadProfile();
   }, []);
 
   useEffect(() => {
@@ -43,7 +61,7 @@ export default function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: content }),
+        body: JSON.stringify({ message: content, profile }),
       });
 
       const json = await res.json();
@@ -82,16 +100,14 @@ export default function ChatPage() {
           {messages.map((m) => (
             <div
               key={m.id}
-              className={`mb-2 flex ${
-                m.role === "user" ? "justify-end" : "justify-start"
-              }`}
+              className={`mb-2 flex ${m.role === "user" ? "justify-end" : "justify-start"
+                }`}
             >
               <div
-                className={`max-w-[80%] rounded-2xl px-3 py-2 ${
-                  m.role === "user"
+                className={`max-w-[80%] rounded-2xl px-3 py-2 ${m.role === "user"
                     ? "bg-emerald-500 text-slate-950"
                     : "bg-slate-800 text-slate-100"
-                } text-[11px] whitespace-pre-wrap`}
+                  } text-[11px] whitespace-pre-wrap`}
               >
                 {m.content}
               </div>

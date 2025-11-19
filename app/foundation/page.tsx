@@ -165,17 +165,17 @@ function computeGoldStreak(
 const DEFAULT_FOUNDATIONS: Omit<Foundation, "id" | "start_date" | "end_date">[] =
   [
     {
-      title: "Complete A+ Problem for today",
+      title: "Complete A+ Problem",
       schedule_type: "daily",
       x_per_week: null,
     },
     {
-      title: "Journal and reflect",
+      title: "Workout 45+ min",
       schedule_type: "daily",
       x_per_week: null,
     },
     {
-      title: "Move your body 45+ min",
+      title: "Journal/reflect",
       schedule_type: "daily",
       x_per_week: null,
     },
@@ -573,17 +573,81 @@ export default function FoundationPage() {
 
     setSavingOnboarding(true);
     try {
-      await fetch("/api/onboarding", {
+      const res = await fetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(onboarding),
       });
+
+      if (!res.ok) throw new Error("Failed to generate onboarding data");
+
+      const data = await res.json();
+      // data: { keyTruth, board, goals, aiVoice }
+
+      const { data: auth } = await supabase.auth.getUser();
+      if (auth?.user) {
+        // 1. Save Profile
+        await supabase.from("profiles").upsert({
+          id: auth.user.id,
+          priorities: onboarding.priorities,
+          life_summary: onboarding.lifeSummary,
+          ideology: onboarding.ideology,
+          key_truth: data.keyTruth,
+          ai_voice: data.aiVoice,
+        });
+
+        // 2. Save Board Members
+        if (Array.isArray(data.board)) {
+          const members = data.board.map((m: any) => ({
+            user_id: auth.user.id,
+            name: m.name,
+            role: m.role,
+            why: m.why,
+          }));
+          await supabase.from("board_members").insert(members);
+        }
+
+        // 3. Save Goals
+        if (data.goals) {
+          const goalInserts: any[] = [];
+          // horizons: 3y, 1y, 6m, 1m
+          for (const horizon of ["3y", "1y", "6m", "1m"]) {
+            const list = data.goals[horizon];
+            if (Array.isArray(list)) {
+              list.forEach((g: any) => {
+                goalInserts.push({
+                  user_id: auth.user.id,
+                  title: g.title,
+                  horizon,
+                  status: "not_started",
+                  // rough estimates for target_date
+                  target_date:
+                    horizon === "3y"
+                      ? format(addDays(new Date(), 365 * 3), "yyyy-MM-dd")
+                      : horizon === "1y"
+                        ? format(addDays(new Date(), 365), "yyyy-MM-dd")
+                        : horizon === "6m"
+                          ? format(addDays(new Date(), 180), "yyyy-MM-dd")
+                          : format(addDays(new Date(), 30), "yyyy-MM-dd"),
+                  pinned: false,
+                });
+              });
+            }
+          }
+          if (goalInserts.length > 0) {
+            await supabase.from("goals").insert(goalInserts);
+          }
+        }
+      }
 
       if (typeof window !== "undefined") {
         window.localStorage.setItem(ONBOARDING_KEY, "1");
       }
 
       setShowOnboarding(false);
+    } catch (err) {
+      console.error("Onboarding error:", err);
+      alert("Something went wrong saving your profile. Please try again.");
     } finally {
       setSavingOnboarding(false);
     }
@@ -682,11 +746,10 @@ export default function FoundationPage() {
                       key={opt}
                       type="button"
                       onClick={() => setNewSchedule(opt)}
-                      className={`rounded-full px-2 py-0.5 ${
-                        newSchedule === opt
+                      className={`rounded-full px-2 py-0.5 ${newSchedule === opt
                           ? "bg-emerald-500 text-slate-950"
                           : "bg-slate-800 text-slate-300"
-                      }`}
+                        }`}
                     >
                       {opt === "xPerWeek" ? "x/week" : opt}
                     </button>
@@ -735,11 +798,10 @@ export default function FoundationPage() {
                     <button
                       type="button"
                       onClick={() => handleToggleFoundation(f)}
-                      className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border ${
-                        completed
+                      className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border ${completed
                           ? "border-emerald-400 bg-emerald-500 text-slate-950"
                           : "border-slate-600 bg-slate-950 text-slate-400"
-                      }`}
+                        }`}
                     >
                       {completed ? "✓" : ""}
                     </button>
@@ -754,12 +816,12 @@ export default function FoundationPage() {
                             {f.schedule_type === "daily"
                               ? "Daily"
                               : f.schedule_type === "weekdays"
-                              ? "Weekdays"
-                              : f.schedule_type === "weekly"
-                              ? "Weekly"
-                              : f.schedule_type === "monthly"
-                              ? "Monthly"
-                              : `${f.x_per_week}x per week`}
+                                ? "Weekdays"
+                                : f.schedule_type === "weekly"
+                                  ? "Weekly"
+                                  : f.schedule_type === "monthly"
+                                    ? "Monthly"
+                                    : `${f.x_per_week}x per week`}
                             {streak > 0 && (
                               <span className="ml-2 text-emerald-300">
                                 • Streak: {streak}
