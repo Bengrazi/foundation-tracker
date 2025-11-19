@@ -257,6 +257,7 @@ export default function FoundationPage() {
         const todayKey = dateKey(new Date());
         const inserts = DEFAULT_FOUNDATIONS.map((f) => ({
           ...f,
+          user_id: auth.user.id,
           start_date: todayKey,
           end_date: null,
         }));
@@ -268,6 +269,7 @@ export default function FoundationPage() {
 
         if (seedError) {
           console.error("Error seeding default foundations", seedError);
+          alert("Failed to seed default habits. Please try resetting again.");
         }
 
         if (!seedError && seeded) {
@@ -511,7 +513,11 @@ export default function FoundationPage() {
   const handleCreateFoundation = async () => {
     if (!newTitle.trim()) return;
 
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth?.user) return;
+
     const insert = {
+      user_id: auth.user.id,
       title: newTitle.trim(),
       schedule_type: newSchedule,
       x_per_week: newSchedule === "xPerWeek" ? newXPerWeek : null,
@@ -527,6 +533,7 @@ export default function FoundationPage() {
 
     if (error) {
       console.error("Error creating foundation", error);
+      alert(`Error creating habit: ${error.message}`);
       return;
     }
 
@@ -747,8 +754,8 @@ export default function FoundationPage() {
                       type="button"
                       onClick={() => setNewSchedule(opt)}
                       className={`rounded-full px-2 py-0.5 ${newSchedule === opt
-                          ? "bg-emerald-500 text-slate-950"
-                          : "bg-slate-800 text-slate-300"
+                        ? "bg-emerald-500 text-slate-950"
+                        : "bg-slate-800 text-slate-300"
                         }`}
                     >
                       {opt === "xPerWeek" ? "x/week" : opt}
@@ -799,8 +806,8 @@ export default function FoundationPage() {
                       type="button"
                       onClick={() => handleToggleFoundation(f)}
                       className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border ${completed
-                          ? "border-emerald-400 bg-emerald-500 text-slate-950"
-                          : "border-slate-600 bg-slate-950 text-slate-400"
+                        ? "border-emerald-400 bg-emerald-500 text-slate-950"
+                        : "border-slate-600 bg-slate-950 text-slate-400"
                         }`}
                     >
                       {completed ? "✓" : ""}

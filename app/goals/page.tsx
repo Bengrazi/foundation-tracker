@@ -63,7 +63,14 @@ export default function GoalsPage() {
     const updates = goals.map((g) =>
       supabase.from("goals").update(g).eq("id", g.id)
     );
-    await Promise.all(updates);
+    const results = await Promise.all(updates);
+    const errors = results.filter((r) => r.error);
+    if (errors.length > 0) {
+      console.error("Error saving goals", errors);
+      alert(`Failed to save ${errors.length} goals. Check console for details.`);
+    } else {
+      alert("Goals saved successfully!");
+    }
   }
 
   async function createGoal() {
@@ -85,7 +92,13 @@ export default function GoalsPage() {
       .select("*")
       .single();
 
-    if (!error && data) {
+    if (error) {
+      console.error("Error creating goal", error);
+      alert(`Error creating goal: ${error.message}`);
+      return;
+    }
+
+    if (data) {
       setGoals((prev) => [...prev, data as Goal]);
       setNewTitle("");
       setShowNewGoal(false);

@@ -81,8 +81,11 @@ export default function ReflectPage() {
 
     setSaving(false);
 
-    if (!error && data) {
-      // no-op; state already in sync
+    if (error) {
+      console.error("Error saving reflection", error);
+      alert(`Error saving reflection: ${error.message}`);
+    } else if (data) {
+      alert("Reflection saved!");
     }
   }
 
@@ -127,11 +130,10 @@ export default function ReflectPage() {
                 <button
                   key={m.value}
                   onClick={() => setMood(m.value)}
-                  className={`flex h-9 w-9 items-center justify-center rounded-full border text-lg ${
-                    active
+                  className={`flex h-9 w-9 items-center justify-center rounded-full border text-lg ${active
                       ? "border-emerald-400 bg-emerald-500/10"
                       : "border-slate-700 bg-slate-900"
-                  }`}
+                    }`}
                 >
                   {m.emoji}
                 </button>
