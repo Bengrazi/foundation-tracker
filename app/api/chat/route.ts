@@ -21,6 +21,8 @@ export async function POST(req: Request) {
   } else if (contextMode === "allReflections") {
     contextDescription =
       "Use all available reflections and high-level routine/goal data.";
+  } else if (contextMode === "celebration") {
+    contextDescription = "The user just hit a significant streak milestone. Celebrate them warmly and reinforce the value of consistency.";
   } else {
     contextDescription =
       "Give general advice based on healthy routines and consistent habits.";

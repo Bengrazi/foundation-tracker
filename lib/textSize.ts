@@ -1,6 +1,6 @@
 // lib/textSize.ts
 
-export type TextSize = "small" | "medium" | "large";
+export type TextSize = "small" | "medium" | "large" | "xl";
 
 export const TEXT_SIZE_KEY = "foundation_ui_text_size_v1";
 
@@ -14,7 +14,7 @@ export function applySavedTextSize() {
   const saved = window.localStorage.getItem(TEXT_SIZE_KEY) as TextSize | null;
 
   const size: TextSize =
-    saved === "medium" || saved === "large" || saved === "small"
+    saved === "medium" || saved === "large" || saved === "small" || saved === "xl"
       ? saved
       : "small";
 

@@ -191,6 +191,7 @@ export default function SettingsPage() {
     { label: "Small", value: "small" },
     { label: "Medium", value: "medium" },
     { label: "Large", value: "large" },
+    { label: "Extra Large", value: "xl" },
   ];
 
   return (

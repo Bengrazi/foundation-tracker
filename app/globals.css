@@ -7,22 +7,27 @@
 /* Global dark background & text – using plain CSS, no @apply */
 html,
 body {
-  background-color: #020617; /* roughly Tailwind bg-slate-950 */
-  color: #f9fafb;            /* roughly text-slate-50 */
+  background-color: #020617;
+  /* roughly Tailwind bg-slate-950 */
+  color: #f9fafb;
+  /* roughly text-slate-50 */
 }
 
 /* Smooth, rounded scrollbars (where they appear) */
 ::-webkit-scrollbar {
   width: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: #020617;
   border-radius: 9999px;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #1e293b;
   border-radius: 9999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: #22c55e;
 }
@@ -32,9 +37,11 @@ textarea {
   scrollbar-width: thin;
   scrollbar-color: #1f2933 #020617;
 }
+
 /* Global font size controlled by data-text-size on <html> */
 html {
-  font-size: 14px; /* default / "small" */
+  font-size: 14px;
+  /* default / "small" */
 }
 
 html[data-text-size="small"] {
@@ -47,4 +54,8 @@ html[data-text-size="medium"] {
 
 html[data-text-size="large"] {
   font-size: 18px;
+}
+
+html[data-text-size="xl"] {
+  font-size: 20px;
 }

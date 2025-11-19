@@ -16,7 +16,7 @@ interface Goal {
   status: GoalStatus;
   target_date: string;
   horizon: Horizon;
-  pinned: boolean;
+  order_index: number;
 }
 
 export default function GoalsPage() {
@@ -48,7 +48,8 @@ export default function GoalsPage() {
         .from("goals")
         .select("*")
         .eq("user_id", user.id)
-        .order("target_date", { ascending: true });
+        .eq("user_id", user.id)
+        .order("order_index", { ascending: true });
 
       if (!error && data) {
         setGoals(data as Goal[]);
@@ -87,7 +88,7 @@ export default function GoalsPage() {
         target_date: newDate,
         status: newStatus,
         horizon: newHorizon,
-        pinned: false,
+        order_index: (goals.length + 1) * 1000, // simple append logic
       })
       .select("*")
       .single();
@@ -106,14 +107,39 @@ export default function GoalsPage() {
   }
 
   async function deleteGoal(id: string) {
+    if (!confirm("Are you sure you want to delete this goal?")) return;
     await supabase.from("goals").delete().eq("id", id);
     setGoals((prev) => prev.filter((g) => g.id !== id));
   }
 
-  async function togglePin(goal: Goal) {
-    const updated = { ...goal, pinned: !goal.pinned };
-    await supabase.from("goals").update(updated).eq("id", goal.id);
-    setGoals((prev) => prev.map((g) => (g.id === goal.id ? updated : g)));
+  async function moveGoal(goal: Goal, direction: "up" | "down") {
+    const group = goals.filter((g) => g.horizon === goal.horizon).sort((a, b) => a.order_index - b.order_index);
+    const index = group.findIndex((g) => g.id === goal.id);
+    if (index === -1) return;
+
+    const swapIndex = direction === "up" ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= group.length) return;
+
+    const other = group[swapIndex];
+
+    // Swap order_index
+    const newOrder = other.order_index;
+    const otherOrder = goal.order_index;
+
+    // Optimistic update
+    setGoals((prev) =>
+      prev.map((g) => {
+        if (g.id === goal.id) return { ...g, order_index: newOrder };
+        if (g.id === other.id) return { ...g, order_index: otherOrder };
+        return g;
+      })
+    );
+
+    // Persist
+    await Promise.all([
+      supabase.from("goals").update({ order_index: newOrder }).eq("id", goal.id),
+      supabase.from("goals").update({ order_index: otherOrder }).eq("id", other.id),
+    ]);
   }
 
   const groups: Record<Horizon, Goal[]> = { "3y": [], "1y": [], "6m": [], "1m": [] };
@@ -132,12 +158,20 @@ export default function GoalsPage() {
       >
         <div className="flex justify-between gap-3">
           <p className="text-slate-300 font-medium break-words">{goal.title}</p>
-          <button
-            onClick={() => togglePin(goal)}
-            className="text-[10px] text-emerald-400 whitespace-nowrap"
-          >
-            {goal.pinned ? "Unpin" : "Pin"}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => moveGoal(goal, "up")}
+              className="text-[10px] text-slate-500 hover:text-emerald-400 px-1"
+            >
+              ▲
+            </button>
+            <button
+              onClick={() => moveGoal(goal, "down")}
+              className="text-[10px] text-slate-500 hover:text-emerald-400 px-1"
+            >
+              ▼
+            </button>
+          </div>
         </div>
 
         <div className="mt-2 flex items-center justify-between gap-2">
@@ -165,7 +199,7 @@ export default function GoalsPage() {
 
           <button
             onClick={() => deleteGoal(goal.id)}
-            className="text-red-400 text-[10px] whitespace-nowrap"
+            className="text-red-400 hover:text-red-300 text-[10px] whitespace-nowrap px-2 py-1 rounded border border-red-900/30 bg-red-950/20"
           >
             Delete
           </button>

@@ -197,8 +197,13 @@ export default function FoundationPage() {
   const [logsByDate, setLogsByDate] = useState<LogsByDate>({});
   const [loading, setLoading] = useState(true);
 
-  const [intention, setIntention] = useState("");
-  const [loadingIntention, setLoadingIntention] = useState(false);
+  const [showNewHabitForm, setShowNewHabitForm] = useState(false);
+  const [creatingHabit, setCreatingHabit] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationMessage, setCelebrationMessage] = useState("");
+  const [celebrationLoading, setCelebrationLoading] = useState(false);
 
   const [newTitle, setNewTitle] = useState("");
   const [newSchedule, setNewSchedule] = useState<ScheduleType>("daily");
@@ -305,448 +310,434 @@ export default function FoundationPage() {
         setLoading(false);
       }
 
-      // 4. Load saved intention for day (if you have a table for it)
-      const { data: intentData, error: intentError } = await supabase
-        .from("daily_intentions") // TODO: confirm table name
-        .select("text")
-        .eq("date", selectedDate)
+    }
+  };
+
+  load();
+
+  return () => {
+    cancelled = true;
+  };
+}, [selectedDate]);
+
+const logsForSelectedDay = useMemo(
+  () => logsByDate[selectedDate] || [],
+  [logsByDate, selectedDate]
+);
+
+const goldStreak = useMemo(
+  () => computeGoldStreak(foundations, logsByDate, selectedDate),
+  [foundations, logsByDate, selectedDate]
+);
+
+const streakByFoundationId = useMemo(() => {
+  const map: Record<string, number> = {};
+  for (const f of foundations) {
+    map[f.id] = computeStreakForFoundation(f, logsByDate, selectedDate);
+  }
+  return map;
+}, [foundations, logsByDate, selectedDate]);
+
+// ---------- Celebration Logic ----------
+
+const checkCelebration = async (
+  foundationId: string,
+  newStreak: number,
+  allDone: boolean,
+  goldStreak: number
+) => {
+  // Milestones
+  const goldMilestones = [1, 7, 10, 13, 25, 50, 69, 100, 150, 200, 250, 300, 350, 365, 400, 500, 600, 700, 730, 800, 900, 1000, 1095, 1250, 1460, 1500, 1825];
+  const habitMilestones = [3, 7, 14, 21, 30, 50, 69, 100, 365];
+
+  let trigger = "";
+  let count = 0;
+
+  // Prioritize Gold Streak
+  if (allDone && goldMilestones.includes(goldStreak)) {
+    trigger = "gold";
+    count = goldStreak;
+  } else if (habitMilestones.includes(newStreak)) {
+    trigger = "habit";
+    count = newStreak;
+  }
+
+  if (trigger) {
+    setShowCelebration(true);
+    setCelebrationLoading(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", auth.user?.id)
         .single();
 
-      if (intentError && intentError.code !== "PGRST116") {
-        // ignore "no rows" error
-        console.error("Error loading intention", intentError);
-      }
-
-      if (!cancelled) {
-        setIntention(intentData?.text ?? "");
-      }
-    };
-
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedDate]);
-
-  const logsForSelectedDay = useMemo(
-    () => logsByDate[selectedDate] || [],
-    [logsByDate, selectedDate]
-  );
-
-  const goldStreak = useMemo(
-    () => computeGoldStreak(foundations, logsByDate, selectedDate),
-    [foundations, logsByDate, selectedDate]
-  );
-
-  const streakByFoundationId = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const f of foundations) {
-      map[f.id] = computeStreakForFoundation(f, logsByDate, selectedDate);
-    }
-    return map;
-  }, [foundations, logsByDate, selectedDate]);
-
-  // ---------- Intentions ----------
-
-  const handleGenerateIntention = async () => {
-    setLoadingIntention(true);
-    try {
-      const res = await fetch("/api/intention", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: selectedDate }),
+        body: JSON.stringify({
+          message: `Generate a short, powerful, personalized congratulation for a ${trigger} streak of ${count} days.`,
+          contextMode: "celebration",
+          profile,
+        }),
       });
-
-      if (!res.ok) {
-        console.error("Intention API error", await res.text());
-        return;
-      }
-
-      const data = await res.json();
-      const text =
-        (data.intention as string) ||
-        (data.text as string) ||
-        (data.message as string) ||
-        "";
-
-      setIntention(text);
-
-      // persist intention to supabase
-      await supabase
-        .from("daily_intentions")
-        .upsert(
-          { date: selectedDate, text },
-          { onConflict: "date" } // TODO: adjust if composite PK
-        );
+      const json = await res.json();
+      setCelebrationMessage(json.reply);
+    } catch (e) {
+      setCelebrationMessage(`Amazing job! ${count} days streak!`);
     } finally {
-      setLoadingIntention(false);
+      setCelebrationLoading(false);
     }
-  };
+  }
+};
 
-  const handleSaveIntentionManually = async (text: string) => {
-    setIntention(text);
-    // best-effort save, but don't block UI
+// ---------- Foundation CRUD ----------
+
+const handleToggleFoundation = async (foundation: Foundation) => {
+  const existing = logsForSelectedDay.find(
+    (l) => l.foundation_id === foundation.id
+  );
+
+  const completed = !(existing?.completed ?? false);
+
+  // optimistic update
+  setLogsByDate((prev) => {
+    const dayLogs = [...(prev[selectedDate] || [])];
+    if (existing) {
+      const idx = dayLogs.findIndex((l) => l.id === existing.id);
+      if (idx !== -1) {
+        dayLogs[idx] = { ...existing, completed };
+      }
+    } else {
+      dayLogs.push({
+        id: `temp-${Date.now()}`,
+        foundation_id: foundation.id,
+        date: selectedDate,
+        completed,
+        notes: null,
+      });
+    }
+    return { ...prev, [selectedDate]: dayLogs };
+  });
+
+  // persist
+  if (existing) {
     await supabase
-      .from("daily_intentions")
-      .upsert(
-        { date: selectedDate, text },
-        { onConflict: "date" } // TODO: adjust if composite PK
-      );
+      .from("foundation_logs")
+      .update({ completed })
+      .eq("id", existing.id);
+  } else {
+    const { data, error } = await supabase
+      .from("foundation_logs")
+      .insert({
+        foundation_id: foundation.id,
+        date: selectedDate,
+        completed,
+        notes: null,
+      })
+      .select("*")
+      .single();
+
+    if (!error && data) {
+      setLogsByDate((prev) => {
+        const dayLogs = [...(prev[selectedDate] || [])];
+        // replace temp with real row
+        const tempIdx = dayLogs.findIndex((l) =>
+          String(l.id).startsWith("temp-")
+        );
+        if (tempIdx !== -1) {
+          dayLogs[tempIdx] = data as FoundationLog;
+        } else {
+          dayLogs.push(data as FoundationLog);
+        }
+        return { ...prev, [selectedDate]: dayLogs };
+      });
+    }
+  }
+};
+
+const handleNotesChange = async (foundation: Foundation, notes: string) => {
+  const existing = logsForSelectedDay.find(
+    (l) => l.foundation_id === foundation.id
+  );
+
+  // optimistic
+  setLogsByDate((prev) => {
+    const dayLogs = [...(prev[selectedDate] || [])];
+    if (existing) {
+      const idx = dayLogs.findIndex((l) => l.id === existing.id);
+      if (idx !== -1) {
+        dayLogs[idx] = { ...existing, notes };
+      }
+    } else {
+      dayLogs.push({
+        id: `temp-notes-${Date.now()}`,
+        foundation_id: foundation.id,
+        date: selectedDate,
+        completed: false,
+        notes,
+      });
+    }
+    return { ...prev, [selectedDate]: dayLogs };
+  });
+
+  if (existing) {
+    await supabase
+      .from("foundation_logs")
+      .update({ notes })
+      .eq("id", existing.id);
+  } else {
+    const { data, error } = await supabase
+      .from("foundation_logs")
+      .insert({
+        foundation_id: foundation.id,
+        date: selectedDate,
+        completed: false,
+        notes,
+      })
+      .select("*")
+      .single();
+
+    if (!error && data) {
+      setLogsByDate((prev) => {
+        const dayLogs = [...(prev[selectedDate] || [])];
+        const tempIdx = dayLogs.findIndex((l) =>
+          String(l.id).startsWith("temp-notes-")
+        );
+        if (tempIdx !== -1) {
+          dayLogs[tempIdx] = data as FoundationLog;
+        } else {
+          dayLogs.push(data as FoundationLog);
+        }
+        return { ...prev, [selectedDate]: dayLogs };
+      });
+    }
+  }
+};
+
+const handleCreateFoundation = async () => {
+  if (!newTitle.trim()) return;
+
+  setCreatingHabit(true);
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth?.user) {
+    setCreatingHabit(false);
+    return;
+  }
+
+  const insert = {
+    user_id: auth.user.id,
+    title: newTitle.trim(),
+    schedule_type: newSchedule,
+    x_per_week: newSchedule === "xPerWeek" ? newXPerWeek : null,
+    start_date: selectedDate,
+    end_date: null,
   };
 
-  // ---------- Foundation CRUD ----------
+  const { data, error } = await supabase
+    .from("foundations")
+    .insert(insert)
+    .select("*")
+    .single();
 
-  const handleToggleFoundation = async (foundation: Foundation) => {
-    const existing = logsForSelectedDay.find(
-      (l) => l.foundation_id === foundation.id
-    );
+  setCreatingHabit(false);
 
-    const completed = !(existing?.completed ?? false);
+  if (error) {
+    console.error("Error creating foundation", error);
+    alert(`Error creating habit: ${error.message}`);
+    return;
+  }
 
-    // optimistic update
-    setLogsByDate((prev) => {
-      const dayLogs = [...(prev[selectedDate] || [])];
-      if (existing) {
-        const idx = dayLogs.findIndex((l) => l.id === existing.id);
-        if (idx !== -1) {
-          dayLogs[idx] = { ...existing, completed };
-        }
-      } else {
-        dayLogs.push({
-          id: `temp-${Date.now()}`,
-          foundation_id: foundation.id,
-          date: selectedDate,
-          completed,
-          notes: null,
-        });
-      }
-      return { ...prev, [selectedDate]: dayLogs };
+  setFoundations((prev) => [...prev, data as Foundation]);
+  setNewTitle("");
+  setNewSchedule("daily");
+  setNewXPerWeek(3);
+  setShowNewHabitForm(false);
+};
+
+const handleDeleteFoundationFromTodayForward = async (
+  foundation: Foundation
+) => {
+  if (!confirm("Are you sure you want to remove this habit?")) return;
+
+  setDeletingId(foundation.id);
+  // Don’t delete past logs. Just mark end_date = selectedDate - 1.
+  const prevDay = dateKey(addDays(parseISO(selectedDate), -1));
+
+  const { data, error } = await supabase
+    .from("foundations")
+    .update({ end_date: prevDay })
+    .eq("id", foundation.id)
+    .select("*")
+    .single();
+
+  setDeletingId(null);
+
+  if (error) {
+    console.error("Error ending foundation", error);
+    alert("Failed to remove habit.");
+    return;
+  }
+
+  const updated = data as Foundation;
+
+  setFoundations((prev) =>
+    prev.map((f) => (f.id === updated.id ? updated : f))
+  );
+};
+
+// ---------- Onboarding ----------
+
+const handleOnboardingChange = (field: keyof OnboardingState, value: string) =>
+  setOnboarding((prev) => ({ ...prev, [field]: value }));
+
+const handleOnboardingSubmit = async () => {
+  if (!onboarding.priorities.trim() || !onboarding.lifeSummary.trim()) {
+    return;
+  }
+
+  setSavingOnboarding(true);
+  try {
+    const res = await fetch("/api/onboarding", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(onboarding),
     });
 
-    // persist
-    if (existing) {
-      await supabase
-        .from("foundation_logs")
-        .update({ completed })
-        .eq("id", existing.id);
-    } else {
-      const { data, error } = await supabase
-        .from("foundation_logs")
-        .insert({
-          foundation_id: foundation.id,
-          date: selectedDate,
-          completed,
-          notes: null,
-        })
-        .select("*")
-        .single();
+    if (!res.ok) throw new Error("Failed to generate onboarding data");
 
-      if (!error && data) {
-        setLogsByDate((prev) => {
-          const dayLogs = [...(prev[selectedDate] || [])];
-          // replace temp with real row
-          const tempIdx = dayLogs.findIndex((l) =>
-            String(l.id).startsWith("temp-")
-          );
-          if (tempIdx !== -1) {
-            dayLogs[tempIdx] = data as FoundationLog;
-          } else {
-            dayLogs.push(data as FoundationLog);
-          }
-          return { ...prev, [selectedDate]: dayLogs };
-        });
-      }
-    }
-  };
-
-  const handleNotesChange = async (foundation: Foundation, notes: string) => {
-    const existing = logsForSelectedDay.find(
-      (l) => l.foundation_id === foundation.id
-    );
-
-    // optimistic
-    setLogsByDate((prev) => {
-      const dayLogs = [...(prev[selectedDate] || [])];
-      if (existing) {
-        const idx = dayLogs.findIndex((l) => l.id === existing.id);
-        if (idx !== -1) {
-          dayLogs[idx] = { ...existing, notes };
-        }
-      } else {
-        dayLogs.push({
-          id: `temp-notes-${Date.now()}`,
-          foundation_id: foundation.id,
-          date: selectedDate,
-          completed: false,
-          notes,
-        });
-      }
-      return { ...prev, [selectedDate]: dayLogs };
-    });
-
-    if (existing) {
-      await supabase
-        .from("foundation_logs")
-        .update({ notes })
-        .eq("id", existing.id);
-    } else {
-      const { data, error } = await supabase
-        .from("foundation_logs")
-        .insert({
-          foundation_id: foundation.id,
-          date: selectedDate,
-          completed: false,
-          notes,
-        })
-        .select("*")
-        .single();
-
-      if (!error && data) {
-        setLogsByDate((prev) => {
-          const dayLogs = [...(prev[selectedDate] || [])];
-          const tempIdx = dayLogs.findIndex((l) =>
-            String(l.id).startsWith("temp-notes-")
-          );
-          if (tempIdx !== -1) {
-            dayLogs[tempIdx] = data as FoundationLog;
-          } else {
-            dayLogs.push(data as FoundationLog);
-          }
-          return { ...prev, [selectedDate]: dayLogs };
-        });
-      }
-    }
-  };
-
-  const handleCreateFoundation = async () => {
-    if (!newTitle.trim()) return;
+    const data = await res.json();
+    // data: { keyTruth, board, goals, aiVoice }
 
     const { data: auth } = await supabase.auth.getUser();
-    if (!auth?.user) return;
-
-    const insert = {
-      user_id: auth.user.id,
-      title: newTitle.trim(),
-      schedule_type: newSchedule,
-      x_per_week: newSchedule === "xPerWeek" ? newXPerWeek : null,
-      start_date: selectedDate,
-      end_date: null,
-    };
-
-    const { data, error } = await supabase
-      .from("foundations")
-      .insert(insert)
-      .select("*")
-      .single();
-
-    if (error) {
-      console.error("Error creating foundation", error);
-      alert(`Error creating habit: ${error.message}`);
-      return;
-    }
-
-    setFoundations((prev) => [...prev, data as Foundation]);
-    setNewTitle("");
-    setNewSchedule("daily");
-    setNewXPerWeek(3);
-  };
-
-  const handleDeleteFoundationFromTodayForward = async (
-    foundation: Foundation
-  ) => {
-    // Don’t delete past logs. Just mark end_date = selectedDate - 1.
-    const prevDay = dateKey(addDays(parseISO(selectedDate), -1));
-
-    const { data, error } = await supabase
-      .from("foundations")
-      .update({ end_date: prevDay })
-      .eq("id", foundation.id)
-      .select("*")
-      .single();
-
-    if (error) {
-      console.error("Error ending foundation", error);
-      return;
-    }
-
-    const updated = data as Foundation;
-
-    setFoundations((prev) =>
-      prev.map((f) => (f.id === updated.id ? updated : f))
-    );
-  };
-
-  // ---------- Onboarding ----------
-
-  const handleOnboardingChange = (field: keyof OnboardingState, value: string) =>
-    setOnboarding((prev) => ({ ...prev, [field]: value }));
-
-  const handleOnboardingSubmit = async () => {
-    if (!onboarding.priorities.trim() || !onboarding.lifeSummary.trim()) {
-      return;
-    }
-
-    setSavingOnboarding(true);
-    try {
-      const res = await fetch("/api/onboarding", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(onboarding),
+    if (auth?.user) {
+      // 1. Save Profile
+      await supabase.from("profiles").upsert({
+        id: auth.user.id,
+        priorities: onboarding.priorities,
+        life_summary: onboarding.lifeSummary,
+        ideology: onboarding.ideology,
+        key_truth: data.keyTruth,
+        ai_voice: data.aiVoice,
       });
 
-      if (!res.ok) throw new Error("Failed to generate onboarding data");
+      // 2. Save Board Members
+      if (Array.isArray(data.board)) {
+        const members = data.board.map((m: any) => ({
+          user_id: auth.user.id,
+          name: m.name,
+          role: m.role,
+          why: m.why,
+        }));
+        await supabase.from("board_members").insert(members);
+      }
 
-      const data = await res.json();
-      // data: { keyTruth, board, goals, aiVoice }
-
-      const { data: auth } = await supabase.auth.getUser();
-      if (auth?.user) {
-        // 1. Save Profile
-        await supabase.from("profiles").upsert({
-          id: auth.user.id,
-          priorities: onboarding.priorities,
-          life_summary: onboarding.lifeSummary,
-          ideology: onboarding.ideology,
-          key_truth: data.keyTruth,
-          ai_voice: data.aiVoice,
-        });
-
-        // 2. Save Board Members
-        if (Array.isArray(data.board)) {
-          const members = data.board.map((m: any) => ({
-            user_id: auth.user.id,
-            name: m.name,
-            role: m.role,
-            why: m.why,
-          }));
-          await supabase.from("board_members").insert(members);
-        }
-
-        // 3. Save Goals
-        if (data.goals) {
-          const goalInserts: any[] = [];
-          // horizons: 3y, 1y, 6m, 1m
-          for (const horizon of ["3y", "1y", "6m", "1m"]) {
-            const list = data.goals[horizon];
-            if (Array.isArray(list)) {
-              list.forEach((g: any) => {
-                goalInserts.push({
-                  user_id: auth.user.id,
-                  title: g.title,
-                  horizon,
-                  status: "not_started",
-                  // rough estimates for target_date
-                  target_date:
-                    horizon === "3y"
-                      ? format(addDays(new Date(), 365 * 3), "yyyy-MM-dd")
-                      : horizon === "1y"
-                        ? format(addDays(new Date(), 365), "yyyy-MM-dd")
-                        : horizon === "6m"
-                          ? format(addDays(new Date(), 180), "yyyy-MM-dd")
-                          : format(addDays(new Date(), 30), "yyyy-MM-dd"),
-                  pinned: false,
-                });
+      // 3. Save Goals
+      if (data.goals) {
+        const goalInserts: any[] = [];
+        // horizons: 3y, 1y, 6m, 1m
+        for (const horizon of ["3y", "1y", "6m", "1m"]) {
+          const list = data.goals[horizon];
+          if (Array.isArray(list)) {
+            list.forEach((g: any) => {
+              goalInserts.push({
+                user_id: auth.user.id,
+                title: g.title,
+                horizon,
+                status: "not_started",
+                // rough estimates for target_date
+                target_date:
+                  horizon === "3y"
+                    ? format(addDays(new Date(), 365 * 3), "yyyy-MM-dd")
+                    : horizon === "1y"
+                      ? format(addDays(new Date(), 365), "yyyy-MM-dd")
+                      : horizon === "6m"
+                        ? format(addDays(new Date(), 180), "yyyy-MM-dd")
+                        : format(addDays(new Date(), 30), "yyyy-MM-dd"),
+                pinned: false,
               });
-            }
-          }
-          if (goalInserts.length > 0) {
-            await supabase.from("goals").insert(goalInserts);
+            });
           }
         }
+        if (goalInserts.length > 0) {
+          await supabase.from("goals").insert(goalInserts);
+        }
       }
-
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(ONBOARDING_KEY, "1");
-      }
-
-      setShowOnboarding(false);
-    } catch (err) {
-      console.error("Onboarding error:", err);
-      alert("Something went wrong saving your profile. Please try again.");
-    } finally {
-      setSavingOnboarding(false);
     }
-  };
 
-  // ---------- Render ----------
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(ONBOARDING_KEY, "1");
+    }
 
-  const habitsDoneToday = foundations.filter((f) =>
-    logsForSelectedDay.some((l) => l.foundation_id === f.id && l.completed)
-  ).length;
+    setShowOnboarding(false);
+  } catch (err) {
+    console.error("Onboarding error:", err);
+    alert("Something went wrong saving your profile. Please try again.");
+  } finally {
+    setSavingOnboarding(false);
+  }
+};
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-20">
-      <AuthGuardHeader />
+// ---------- Render ----------
 
-      <main className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-24 pt-2">
-        {/* Date header */}
-        <section className="mt-2 flex items-center justify-between">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              Today
-            </div>
-            <div className="text-xl font-semibold text-slate-50">
-              {format(parseISO(selectedDate), "EEEE, MMM d")}
-            </div>
-            <div className="text-xs text-slate-400">
-              {habitsDoneToday}/{foundations.length} habits today
-            </div>
+const habitsDoneToday = foundations.filter((f) =>
+  logsForSelectedDay.some((l) => l.foundation_id === f.id && l.completed)
+).length;
+
+return (
+  <div className="min-h-screen bg-slate-950 text-slate-100 pb-20">
+    <AuthGuardHeader />
+
+    <main className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-24 pt-2">
+      {/* Date header */}
+      <section className="mt-2 flex items-center justify-between">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            Today
           </div>
-
-          <div className="text-right">
-            <label className="block text-[11px] uppercase tracking-wide text-slate-400">
-              Date
-            </label>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="mt-1 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-100 outline-none focus:border-emerald-400"
-            />
-            <div className="mt-1 text-[11px] text-amber-300">
-              Gold streak: {goldStreak} {goldStreak === 1 ? "day" : "days"}
-            </div>
+          <div className="text-xl font-semibold text-slate-50">
+            {format(parseISO(selectedDate), "EEEE, MMM d")}
           </div>
-        </section>
-
-        {/* Daily intention */}
-        <section className="rounded-2xl bg-slate-900/80 p-4 ring-1 ring-slate-800">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold tracking-wide text-slate-300 uppercase">
-              Daily intention
-            </h2>
-            <button
-              onClick={handleGenerateIntention}
-              disabled={loadingIntention}
-              className="text-[11px] text-emerald-300 hover:text-emerald-200 disabled:opacity-60"
-            >
-              {loadingIntention ? "…" : "New"}
-            </button>
+          <div className="text-xs text-slate-400">
+            {habitsDoneToday}/{foundations.length} habits today
           </div>
-          <textarea
-            value={intention}
-            onChange={(e) => handleSaveIntentionManually(e.target.value)}
-            rows={3}
-            className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-400"
+        </div>
+
+        <div className="text-right">
+          <label className="block text-[11px] uppercase tracking-wide text-slate-400">
+            Date
+          </label>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="mt-1 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-100 outline-none focus:border-emerald-400"
           />
-        </section>
-
-        {/* Foundations list */}
-        <section>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold tracking-wide text-slate-300 uppercase">
-              Daily habits
-            </h2>
-            <button
-              onClick={handleCreateFoundation}
-              className="text-[11px] text-emerald-300 hover:text-emerald-200"
-            >
-              + Add
-            </button>
+          <div className="mt-1 text-[11px] text-amber-300">
+            Gold streak: {goldStreak} {goldStreak === 1 ? "day" : "days"}
           </div>
+        </div>
+      </section>
 
-          {/* New foundation inline editor */}
+
+
+      {/* Foundations list */}
+      <section>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-xs font-semibold tracking-wide text-slate-300 uppercase">
+            Daily habits
+          </h2>
+          <button
+            onClick={() => setShowNewHabitForm(!showNewHabitForm)}
+            className="text-[11px] text-emerald-300 hover:text-emerald-200"
+          >
+            {showNewHabitForm ? "Cancel" : "+ Add"}
+          </button>
+        </div>
+
+        {/* New foundation inline editor */}
+        {showNewHabitForm && (
           <div className="mb-3 rounded-2xl bg-slate-900/70 p-3 ring-1 ring-slate-800">
             <input
               value={newTitle}
@@ -790,90 +781,125 @@ export default function FoundationPage() {
                 </div>
               )}
             </div>
+
+            <button
+              onClick={handleCreateFoundation}
+              disabled={creatingHabit}
+              className="mt-3 w-full rounded-full bg-emerald-500 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-60"
+            >
+              {creatingHabit ? "Saving..." : "Save"}
+            </button>
           </div>
+        )}
 
-          {loading && (
-            <div className="py-6 text-center text-xs text-slate-400">
-              Loading your foundations…
-            </div>
-          )}
+        {loading && (
+          <div className="py-6 text-center text-xs text-slate-400">
+            Loading your foundations…
+          </div>
+        )}
 
-          {!loading &&
-            foundations.map((f) => {
-              const logs = logsForSelectedDay;
-              const log = logs.find((l) => l.foundation_id === f.id);
-              const completed = log?.completed ?? false;
-              const streak = streakByFoundationId[f.id] ?? 0;
+        {!loading &&
+          foundations.map((f) => {
+            const logs = logsForSelectedDay;
+            const log = logs.find((l) => l.foundation_id === f.id);
+            const completed = log?.completed ?? false;
+            const streak = streakByFoundationId[f.id] ?? 0;
 
-              return (
-                <div
-                  key={f.id}
-                  className="mb-3 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleFoundation(f)}
-                      className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border ${completed
-                        ? "border-emerald-400 bg-emerald-500 text-slate-950"
-                        : "border-slate-600 bg-slate-950 text-slate-400"
-                        }`}
-                    >
-                      {completed ? "✓" : ""}
-                    </button>
+            return (
+              <div
+                key={f.id}
+                className="mb-3 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleFoundation(f)}
+                    className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border ${completed
+                      ? "border-emerald-400 bg-emerald-500 text-slate-950"
+                      : "border-slate-600 bg-slate-950 text-slate-400"
+                      }`}
+                  >
+                    {completed ? "✓" : ""}
+                  </button>
 
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <div className="text-sm font-semibold text-slate-50">
-                            {f.title}
-                          </div>
-                          <div className="text-[11px] text-slate-400">
-                            {f.schedule_type === "daily"
-                              ? "Daily"
-                              : f.schedule_type === "weekdays"
-                                ? "Weekdays"
-                                : f.schedule_type === "weekly"
-                                  ? "Weekly"
-                                  : f.schedule_type === "monthly"
-                                    ? "Monthly"
-                                    : `${f.x_per_week}x per week`}
-                            {streak > 0 && (
-                              <span className="ml-2 text-emerald-300">
-                                • Streak: {streak}
-                              </span>
-                            )}
-                          </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-50">
+                          {f.title}
                         </div>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleDeleteFoundationFromTodayForward(f)
-                          }
-                          className="text-[11px] text-slate-400 hover:text-red-300"
-                        >
-                          Remove →
-                        </button>
+                        <div className="text-[11px] text-slate-400">
+                          {f.schedule_type === "daily"
+                            ? "Daily"
+                            : f.schedule_type === "weekdays"
+                              ? "Weekdays"
+                              : f.schedule_type === "weekly"
+                                ? "Weekly"
+                                : f.schedule_type === "monthly"
+                                  ? "Monthly"
+                                  : `${f.x_per_week}x per week`}
+                          {streak > 0 && (
+                            <span className="ml-2 text-emerald-300">
+                              • Streak: {streak}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      <textarea
-                        value={log?.notes ?? ""}
-                        onChange={(e) => handleNotesChange(f, e.target.value)}
-                        placeholder="Notes or extra effort for this habit today..."
-                        rows={2}
-                        className="mt-2 w-full resize-none rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-1.5 text-xs text-slate-100 outline-none focus:border-emerald-400"
-                      />
+                      <button
+                        onClick={() => handleDeleteFoundationFromTodayForward(f)}
+                        disabled={deletingId === f.id}
+                        className="text-[10px] text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-900/30 bg-red-950/20"
+                      >
+                        {deletingId === f.id ? "Removing..." : "Remove"}
+                      </button>
                     </div>
+
+                    <textarea
+                      value={log?.notes ?? ""}
+                      onChange={(e) => handleNotesChange(f, e.target.value)}
+                      placeholder="Notes or extra effort for this habit today..."
+                      rows={2}
+                      className="mt-2 w-full resize-none rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-1.5 text-xs text-slate-100 outline-none focus:border-emerald-400"
+                    />
                   </div>
                 </div>
-              );
-            })}
-        </section>
-      </main>
+              </div>
+            );
+          })}
+      </section>
 
-      {/* ---------- Onboarding modal ---------- */}
-      {showOnboarding && (
+      {/* Celebration Modal */}
+      {
+        showCelebration && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-3xl border border-emerald-500/50 bg-slate-900 p-6 text-center shadow-2xl shadow-emerald-500/20">
+              <div className="mb-4 text-4xl">🎉</div>
+              <h3 className="mb-2 text-xl font-bold text-emerald-400">
+                Congratulations!
+              </h3>
+              <div className="min-h-[60px] text-sm text-slate-200">
+                {celebrationLoading ? (
+                  <span className="animate-pulse">Generating your praise...</span>
+                ) : (
+                  celebrationMessage
+                )}
+              </div>
+              <button
+                onClick={() => setShowCelebration(false)}
+                className="mt-6 w-full rounded-full bg-emerald-500 py-2 font-bold text-slate-950 hover:bg-emerald-400"
+              >
+                Let's go!
+              </button>
+            </div>
+          </div>
+        )
+      }
+    </main >
+
+    {/* ---------- Onboarding modal ---------- */}
+    {
+      showOnboarding && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4">
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-slate-900 p-5 ring-1 ring-slate-700">
             <h2 className="mb-1 text-sm font-semibold text-slate-50">
@@ -963,7 +989,8 @@ export default function FoundationPage() {
             </p>
           </div>
         </div>
-      )}
-    </div>
-  );
+      )
+    }
+  </div >
+);
 }
