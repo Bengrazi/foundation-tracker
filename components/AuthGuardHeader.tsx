@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabaseBrowser } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 
 export function AuthGuardHeader() {
   const router = useRouter();
@@ -11,19 +11,18 @@ export function AuthGuardHeader() {
 
   useEffect(() => {
     const check = async () => {
-      const supabase = supabaseBrowser();
       const { data } = await supabase.auth.getUser();
-      if (!data.user) {
+      if (!data?.user) {
         router.push("/login");
       } else {
         setChecking(false);
       }
     };
+
     check();
   }, [router]);
 
   const logout = async () => {
-    const supabase = supabaseBrowser();
     await supabase.auth.signOut();
     router.push("/login");
   };
@@ -31,13 +30,16 @@ export function AuthGuardHeader() {
   if (checking) return null;
 
   return (
-    <div className="mb-2 flex items-center justify-end">
+    <header className="mx-auto flex max-w-md items-center justify-between px-4 pt-4">
+      <span className="text-xs font-semibold tracking-wide text-slate-400 uppercase">
+        Foundation
+      </span>
       <button
         onClick={logout}
-        className="text-[11px] text-slate-500 underline"
+        className="text-[11px] text-slate-400 hover:text-red-300"
       >
         Sign out
       </button>
-    </div>
+    </header>
   );
 }
