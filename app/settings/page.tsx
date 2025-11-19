@@ -168,11 +168,13 @@ export default function SettingsPage() {
 
       // RLS should ensure we only delete the current user's rows
       await Promise.all([
-        supabase.from("foundation_logs").delete().neq("id", 0),
-        supabase.from("foundations").delete().neq("id", 0),
-        supabase.from("reflections").delete().neq("id", 0),
-        supabase.from("goals").delete().neq("id", 0),
-        supabase.from("daily_intentions").delete().neq("id", 0),
+        supabase.from("foundation_logs").delete().neq("id", "00000000-0000-0000-0000-000000000000"), // Hack to delete all rows (since delete() requires a filter)
+        supabase.from("foundations").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+        supabase.from("reflections").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+        supabase.from("goals").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+        supabase.from("daily_intentions").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+        supabase.from("profiles").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+        supabase.from("board_members").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
       ]);
 
       // Do NOT sign out. Just clear onboarding flag so they see questions again.
