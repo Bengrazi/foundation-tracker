@@ -1,133 +1,232 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { format, subDays } from "date-fns";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
+import { supabase } from "@/lib/supabaseClient";
 import { applySavedTextSize, setTextSize, TextSize } from "@/lib/textSize";
+
+const ONBOARDING_KEY = "foundation_onboarding_done_v1";
+
+type ExportRange = "30" | "all";
+
+// Simple CSV helper
+function toCsv(headers: string[], rows: (string | number | null | undefined)[][]) {
+  const escape = (value: string | number | null | undefined) => {
+    if (value === null || value === undefined) return "";
+    const str = String(value);
+    if (str.includes('"') || str.includes(",") || str.includes("\n")) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const headerLine = headers.join(",");
+  const rowLines = rows.map((row) => row.map(escape).join(","));
+  return [headerLine, ...rowLines].join("\n");
+}
+
+function downloadCsv(filename: string, csv: string) {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [confirmingReset, setConfirmingReset] = useState(false);
-  const [exportLoading, setExportLoading] = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
-  const [currentSize, setCurrentSize] = useState<TextSize>("small");
+  const [exporting, setExporting] = useState<ExportRange | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [textSize, setTextSizeState] = useState<TextSize>("small");
 
   useEffect(() => {
     applySavedTextSize();
-    const saved = (document.documentElement.dataset.textSize ||
-      "small") as TextSize;
-    setCurrentSize(saved);
+    if (typeof window !== "undefined") {
+      const html = document.documentElement;
+      const saved = (html.dataset.textSize as TextSize | undefined) || "small";
+      setTextSizeState(saved);
+    }
   }, []);
 
-  function changeSize(size: TextSize) {
+  const changeSize = (size: TextSize) => {
     setTextSize(size);
-    setCurrentSize(size);
-  }
+    setTextSizeState(size);
+  };
 
-  async function exportCsv(range: "30" | "all") {
-    setExportLoading(true);
+  const handleExport = async (range: ExportRange) => {
+    setExporting(range);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+      const since =
+        range === "30"
+          ? format(subDays(new Date(), 30), "yyyy-MM-dd")
+          : null;
 
-      // Example: fetch reflections + routine_logs. Adjust table names if needed.
-      const [reflectionsRes, logsRes] = await Promise.all([
-        supabase
-          .from("reflections")
-          .select("*")
-          .eq("user_id", user.id),
-        supabase
-          .from("routine_logs")
-          .select("*")
-          .eq("user_id", user.id),
+      // Foundations logs
+      const logsPromise = supabase
+        .from("foundation_logs") // TODO: keep in sync with your schema
+        .select("*")
+        .order("date", { ascending: true });
+
+      const reflectionsPromise = supabase
+        .from("reflections") // TODO: keep in sync with your schema
+        .select("*")
+        .order("date", { ascending: true });
+
+      const goalsPromise = supabase
+        .from("goals") // TODO: keep in sync with your schema
+        .select("*")
+        .order("target_date", { ascending: true });
+
+      const [logsRes, reflRes, goalsRes] = await Promise.all([
+        logsPromise,
+        reflectionsPromise,
+        goalsPromise,
       ]);
 
-      const reflections = reflectionsRes.data ?? [];
-      const logs = logsRes.data ?? [];
+      if (logsRes.error) console.error("Export logs error", logsRes.error);
+      if (reflRes.error) console.error("Export reflections error", reflRes.error);
+      if (goalsRes.error) console.error("Export goals error", goalsRes.error);
 
-      const csvRows: string[] = [];
-      csvRows.push("type,day,extra");
+      const logs = (logsRes.data || []) as any[];
+      const reflections = (reflRes.data || []) as any[];
+      const goals = (goalsRes.data || []) as any[];
 
-      reflections.forEach((r: any) => {
-        csvRows.push(
-          `reflection,${r.day},"${(r.text || "").replace(/"/g, '""')}"`
-        );
-      });
+      const rows: (string | number | null | undefined)[][] = [];
 
-      logs.forEach((l: any) => {
-        csvRows.push(
-          `habit_log,${l.day},"routine:${l.routine_id} completed:${l.completed} notes:${(
-            l.notes || ""
-          ).replace(/"/g, '""')}"`
-        );
-      });
+      const sinceDate = since ? new Date(since) : null;
 
-      const blob = new Blob([csvRows.join("\n")], {
-        type: "text/csv;charset=utf-8;",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download =
-        range === "30" ? "foundation_last30.csv" : "foundation_all.csv";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // foundation logs
+      for (const l of logs) {
+        if (sinceDate && new Date(l.date) < sinceDate) continue;
+        rows.push([
+          "foundation_log",
+          l.date,
+          l.foundation_id,
+          l.completed ? "1" : "0",
+          l.notes ?? "",
+        ]);
+      }
+
+      // reflections
+      for (const r of reflections) {
+        if (sinceDate && new Date(r.date) < sinceDate) continue;
+        rows.push([
+          "reflection",
+          r.date,
+          "",
+          r.mood ?? "",
+          r.text ?? "",
+        ]);
+      }
+
+      // goals (always export all)
+      for (const g of goals) {
+        rows.push([
+          "goal",
+          g.target_date ?? "",
+          g.title ?? "",
+          g.status ?? "",
+          g.horizon ?? "",
+        ]);
+      }
+
+      const headers = ["type", "date", "field1", "field2", "field3"];
+      const csv = toCsv(headers, rows);
+
+      const suffix = range === "30" ? "last30" : "all";
+      downloadCsv(`foundation-export-${suffix}.csv`, csv);
     } finally {
-      setExportLoading(false);
+      setExporting(null);
     }
-  }
+  };
 
-  async function resetApp() {
-    setResetLoading(true);
+  const handleReset = async () => {
+    const first = window.confirm(
+      "Reset Foundation on THIS device? This clears your habits, reflections, goals, and intentions."
+    );
+    if (!first) return;
+    const second = window.confirm(
+      "Are you sure? This cannot be undone. Past data will be deleted for your account."
+    );
+    if (!second) return;
+
+    setResetting(true);
     try {
-      // Clear local device state
-      localStorage.clear();
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user) {
+        // Still clear onboarding so they see questions again
+        window.localStorage.removeItem(ONBOARDING_KEY);
+        router.push("/foundation");
+        return;
+      }
 
-      // (Optional) you could add Supabase deletes here if desired.
+      // RLS should ensure we only delete the current user's rows
+      await Promise.all([
+        supabase.from("foundation_logs").delete().neq("id", 0),
+        supabase.from("foundations").delete().neq("id", 0),
+        supabase.from("reflections").delete().neq("id", 0),
+        supabase.from("goals").delete().neq("id", 0),
+        supabase.from("daily_intentions").delete().neq("id", 0),
+      ]);
 
+      // Do NOT sign out. Just clear onboarding flag so they see questions again.
+      window.localStorage.removeItem(ONBOARDING_KEY);
+
+      // Send them back to Foundation; onboarding modal will appear again.
       router.push("/foundation");
-      router.refresh();
     } finally {
-      setResetLoading(false);
-      setConfirmingReset(false);
+      setResetting(false);
     }
-  }
+  };
 
-  const sizeOptions: { label: string; value: TextSize }[] = [
+  const textSizeOptions: { label: string; value: TextSize }[] = [
     { label: "Small", value: "small" },
     { label: "Medium", value: "medium" },
     { label: "Large", value: "large" },
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
+    <div className="min-h-screen bg-slate-950 text-slate-100 pb-20">
       <AuthGuardHeader />
 
-      <main className="mx-auto max-w-md px-4 pb-28 pt-4">
-        <h1 className="mb-4 text-lg font-semibold">Settings</h1>
+      <main className="mx-auto flex max-w-md flex-col gap-6 px-4 pb-24 pt-4">
+        <section>
+          <h1 className="text-lg font-semibold text-slate-50">Settings</h1>
+          <p className="mt-1 text-xs text-slate-400">
+            Tune your Foundation experience, export your data, or reset this device.
+          </p>
+        </section>
 
         {/* Text size */}
-        <section className="mb-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-4 text-xs">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">
-            Text size
-          </h2>
+        <section className="space-y-3 rounded-2xl bg-slate-900/80 p-4 ring-1 ring-slate-800">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-100">
+              Text size
+            </h2>
+          </div>
+          <p className="text-xs text-slate-400">
+            Adjust the text size across the app. This is stored only on this device.
+          </p>
           <div className="flex gap-2">
-            {sizeOptions.map((opt) => {
-              const active = opt.value === currentSize;
+            {textSizeOptions.map((opt) => {
+              const active = opt.value === textSize;
               return (
                 <button
                   key={opt.value}
+                  type="button"
                   onClick={() => changeSize(opt.value)}
-                  className={`flex-1 rounded-full border px-3 py-1.5 text-[11px] ${
-                    active
-                      ? "border-emerald-400 bg-emerald-500/10 text-emerald-300"
-                      : "border-slate-600 bg-slate-900 text-slate-200"
-                  }`}
+                  className={
+                    "flex-1 rounded-full border px-3 py-1.5 text-xs transition " +
+                    (active
+                      ? "border-emerald-400 bg-emerald-500/90 text-slate-950"
+                      : "border-slate-700 bg-slate-900 text-slate-200 hover:border-emerald-400")
+                  }
                 >
                   {opt.label}
                 </button>
@@ -136,71 +235,61 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Export */}
-        <section className="mb-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-4 text-xs">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">
-            Export data (CSV)
+        {/* Export data */}
+        <section className="space-y-3 rounded-2xl bg-slate-900/80 p-4 ring-1 ring-slate-800">
+          <h2 className="text-sm font-semibold text-slate-100">
+            Export data
           </h2>
-          <p className="mb-3 text-[11px] text-slate-400">
-            Download your reflections and habit logs as CSV.
+          <p className="text-xs text-slate-400">
+            Export your habits, reflections, and goals as a CSV file for your own records.
           </p>
           <div className="flex gap-2">
             <button
-              onClick={() => exportCsv("30")}
-              disabled={exportLoading}
-              className="flex-1 rounded-full bg-slate-800 px-3 py-1.5 text-[11px] text-slate-100 border border-slate-600 disabled:opacity-60"
+              type="button"
+              onClick={() => handleExport("30")}
+              disabled={exporting !== null}
+              className="flex-1 rounded-full bg-slate-800 px-3 py-1.5 text-xs text-slate-100 ring-1 ring-slate-700 hover:bg-slate-700 disabled:opacity-60"
             >
-              Last 30 days
+              {exporting === "30" ? "Exporting…" : "Last 30 days"}
             </button>
             <button
-              onClick={() => exportCsv("all")}
-              disabled={exportLoading}
-              className="flex-1 rounded-full bg-slate-800 px-3 py-1.5 text-[11px] text-slate-100 border border-slate-600 disabled:opacity-60"
+              type="button"
+              onClick={() => handleExport("all")}
+              disabled={exporting !== null}
+              className="flex-1 rounded-full bg-slate-800 px-3 py-1.5 text-xs text-slate-100 ring-1 ring-slate-700 hover:bg-slate-700 disabled:opacity-60"
             >
-              All time
+              {exporting === "all" ? "Exporting…" : "All time"}
             </button>
           </div>
+          <p className="text-[11px] text-slate-500">
+            Exports are private and stay on your device unless you share the file.
+          </p>
         </section>
 
         {/* Reset */}
-        <section className="rounded-2xl border border-red-800/70 bg-red-950/30 p-4 text-xs">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-red-300 mb-2">
-            Reset app
-          </h2>
-          <p className="text-[11px] text-red-100 mb-2">
-            This will clear local data on this device and take you back through
-            the starting questions.
+        <section className="space-y-3 rounded-2xl bg-slate-900/80 p-4 ring-1 ring-red-500/50">
+          <h2 className="text-sm font-semibold text-red-300">Reset app</h2>
+          <p className="text-xs text-slate-300">
+            Reset Foundation on <strong>this device only</strong>. This:
           </p>
-
-          {!confirmingReset ? (
-            <button
-              onClick={() => setConfirmingReset(true)}
-              className="rounded-full bg-red-500 px-4 py-1.5 text-[11px] font-semibold text-slate-950"
-            >
-              Reset Foundation on this device
-            </button>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-[11px] text-red-200">
-                Are you sure? This cannot be undone for this device.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={resetApp}
-                  disabled={resetLoading}
-                  className="flex-1 rounded-full bg-red-500 px-4 py-1.5 text-[11px] font-semibold text-slate-950 disabled:opacity-60"
-                >
-                  {resetLoading ? "Resetting…" : "Yes, reset"}
-                </button>
-                <button
-                  onClick={() => setConfirmingReset(false)}
-                  className="flex-1 rounded-full bg-slate-800 px-4 py-1.5 text-[11px] text-slate-100"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+          <ul className="list-disc pl-5 text-xs text-slate-300">
+            <li>Clears habits, streaks, and notes.</li>
+            <li>Clears reflections.</li>
+            <li>Clears current goals and daily intentions.</li>
+            <li>Keeps your login session.</li>
+          </ul>
+          <p className="text-[11px] text-slate-500">
+            After reset, you&apos;ll be taken back through the starting questions so
+            your goals and daily intention can be recreated by AI.
+          </p>
+          <button
+            type="button"
+            onClick={handleReset}
+            disabled={resetting}
+            className="mt-1 w-full rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-red-400 disabled:opacity-60"
+          >
+            {resetting ? "Resetting…" : "Reset app on this device"}
+          </button>
         </section>
       </main>
     </div>

@@ -1,184 +1,490 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
-import { supabase } from "@/lib/supabaseClient";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
+import { supabase } from "@/lib/supabaseClient";
 import { applySavedTextSize } from "@/lib/textSize";
 
-type ScheduleType = "daily" | "weekdays" | "weekly" | "monthly";
-interface Routine {
+// ------------- Types -------------
+
+type ScheduleType = "daily" | "weekdays" | "weekly" | "monthly" | "xPerWeek";
+
+type Foundation = {
   id: string;
-  user_id: string;
   title: string;
   schedule_type: ScheduleType;
-  times_per_week: number | null;
-}
+  x_per_week: number | null;
+  start_date: string; // "yyyy-MM-dd"
+  end_date: string | null; // null = still active
+};
 
-interface RoutineLog {
+type FoundationLog = {
   id: string;
-  routine_id: string;
-  user_id: string;
-  day: string; // yyyy-MM-dd
+  foundation_id: string;
+  date: string; // "yyyy-MM-dd"
   completed: boolean;
   notes: string | null;
+};
+
+type LogsByDate = Record<string, FoundationLog[]>;
+
+type OnboardingState = {
+  priorities: string;
+  lifeSummary: string;
+  ideology: string;
+};
+
+// ------------- Helpers -------------
+
+const ONBOARDING_KEY = "foundation_onboarding_done_v1";
+
+function dateKey(d: Date | string) {
+  if (typeof d === "string") return d;
+  return format(d, "yyyy-MM-dd");
 }
+
+function isWeekday(dateStr: string) {
+  const d = parseISO(dateStr);
+  const day = d.getDay(); // 0 = Sun, 6 = Sat
+  return day !== 0 && day !== 6;
+}
+
+function matchesSchedule(
+  schedule: ScheduleType,
+  dateStr: string,
+  xPerWeek: number | null
+) {
+  switch (schedule) {
+    case "daily":
+      return true;
+    case "weekdays":
+      return isWeekday(dateStr);
+    case "weekly":
+      // treat any chosen day as eligible; actual enforcement is
+      // done by user behaviour, not by blocking UI
+      return true;
+    case "monthly":
+      return true;
+    case "xPerWeek":
+      // same as weekly – we let user choose which days to hit
+      return (xPerWeek ?? 1) > 0;
+    default:
+      return true;
+  }
+}
+
+function groupLogsByDate(logs: FoundationLog[]): LogsByDate {
+  const map: LogsByDate = {};
+  for (const log of logs) {
+    if (!map[log.date]) map[log.date] = [];
+    map[log.date].push(log);
+  }
+  return map;
+}
+
+function computeStreakForFoundation(
+  foundation: Foundation,
+  logsByDate: LogsByDate,
+  selectedDate: string,
+  maxLookbackDays = 60
+) {
+  let streak = 0;
+  let current = parseISO(selectedDate);
+
+  for (let i = 0; i < maxLookbackDays; i++) {
+    const key = dateKey(current);
+
+    // outside active window?
+    if (key < foundation.start_date) break;
+    if (foundation.end_date && key > foundation.end_date) break;
+
+    if (!matchesSchedule(foundation.schedule_type, key, foundation.x_per_week)) {
+      // skip non-scheduled days without breaking streak
+      current = addDays(current, -1);
+      continue;
+    }
+
+    const logs = logsByDate[key] || [];
+    const log = logs.find((l) => l.foundation_id === foundation.id);
+
+    if (log?.completed) {
+      streak += 1;
+      current = addDays(current, -1);
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+}
+
+function computeGoldStreak(
+  foundations: Foundation[],
+  logsByDate: LogsByDate,
+  selectedDate: string,
+  maxLookbackDays = 60
+) {
+  if (!foundations.length) return 0;
+
+  let streak = 0;
+  let current = parseISO(selectedDate);
+
+  for (let i = 0; i < maxLookbackDays; i++) {
+    const key = dateKey(current);
+
+    const activeOnThisDay = foundations.filter((f) => {
+      if (key < f.start_date) return false;
+      if (f.end_date && key > f.end_date) return false;
+      return matchesSchedule(f.schedule_type, key, f.x_per_week);
+    });
+
+    if (!activeOnThisDay.length) {
+      current = addDays(current, -1);
+      continue;
+    }
+
+    const logs = logsByDate[key] || [];
+    const allDone = activeOnThisDay.every((f) =>
+      logs.some((l) => l.foundation_id === f.id && l.completed)
+    );
+
+    if (allDone) {
+      streak += 1;
+      current = addDays(current, -1);
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+}
+
+// ---------- Initial default foundations ----------
+
+const DEFAULT_FOUNDATIONS: Omit<Foundation, "id" | "start_date" | "end_date">[] =
+  [
+    {
+      title: "Complete A+ Problem for today",
+      schedule_type: "daily",
+      x_per_week: null,
+    },
+    {
+      title: "Journal and reflect",
+      schedule_type: "daily",
+      x_per_week: null,
+    },
+    {
+      title: "Move your body 45+ min",
+      schedule_type: "daily",
+      x_per_week: null,
+    },
+    {
+      title: "Breathing exercises",
+      schedule_type: "daily",
+      x_per_week: null,
+    },
+  ];
+
+// ------------- Component -------------
 
 export default function FoundationPage() {
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), "yyyy-MM-dd")
   );
+
+  const [foundations, setFoundations] = useState<Foundation[]>([]);
+  const [logsByDate, setLogsByDate] = useState<LogsByDate>({});
+  const [loading, setLoading] = useState(true);
+
   const [intention, setIntention] = useState("");
   const [loadingIntention, setLoadingIntention] = useState(false);
 
-  const [routines, setRoutines] = useState<Routine[]>([]);
-  const [logsByRoutine, setLogsByRoutine] = useState<Record<string, RoutineLog>>(
-    {}
-  );
-  const [goldStreak, setGoldStreak] = useState(0);
-  const [showNewRoutine, setShowNewRoutine] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [newSchedule, setNewSchedule] = useState<ScheduleType>("daily");
+  const [newXPerWeek, setNewXPerWeek] = useState<number>(3);
 
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboarding, setOnboarding] = useState<OnboardingState>({
+    priorities: "",
+    lifeSummary: "",
+    ideology: "",
+  });
+  const [savingOnboarding, setSavingOnboarding] = useState(false);
+
+  // text size + onboarding check on mount
   useEffect(() => {
     applySavedTextSize();
+
+    if (typeof window !== "undefined") {
+      const done = window.localStorage.getItem(ONBOARDING_KEY);
+      if (!done) {
+        setShowOnboarding(true);
+      }
+    }
   }, []);
 
+  // Load foundations + logs whenever date changes (and on first load)
   useEffect(() => {
-    loadDay(selectedDate);
-    computeGoldStreak();
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+
+      // 1. Ensure user is logged in (RLS will handle user scoping)
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user) {
+        setLoading(false);
+        return;
+      }
+
+      // 2. Load foundations (active + created up to selectedDate)
+      const { data: fdData, error: fdError } = await supabase
+        .from("foundations") // TODO: confirm table name
+        .select("*")
+        .lte("start_date", selectedDate)
+        .or(`end_date.is.null,end_date.gte.${selectedDate}`)
+        .order("start_date", { ascending: true });
+
+      if (fdError) {
+        console.error("Error loading foundations", fdError);
+      }
+
+      const foundationsLoaded = (fdData || []) as Foundation[];
+
+      // If there are ZERO foundations at all, seed defaults starting today.
+      if (!fdError && foundationsLoaded.length === 0) {
+        const todayKey = dateKey(new Date());
+        const inserts = DEFAULT_FOUNDATIONS.map((f) => ({
+          ...f,
+          start_date: todayKey,
+          end_date: null,
+        }));
+
+        const { data: seeded, error: seedError } = await supabase
+          .from("foundations")
+          .insert(inserts)
+          .select("*");
+
+        if (seedError) {
+          console.error("Error seeding default foundations", seedError);
+        }
+
+        if (!seedError && seeded) {
+          foundationsLoaded.push(...(seeded as Foundation[]));
+        }
+      }
+
+      // 3. Load logs for last 60 days
+      const from = format(addDays(parseISO(selectedDate), -60), "yyyy-MM-dd");
+      const { data: logsData, error: logsError } = await supabase
+        .from("foundation_logs") // TODO: confirm table name
+        .select("*")
+        .gte("date", from)
+        .lte("date", selectedDate)
+        .order("date", { ascending: true });
+
+      if (logsError) {
+        console.error("Error loading foundation logs", logsError);
+      }
+
+      if (!cancelled) {
+        setFoundations(foundationsLoaded);
+        setLogsByDate(groupLogsByDate((logsData || []) as FoundationLog[]));
+        setLoading(false);
+      }
+
+      // 4. Load saved intention for day (if you have a table for it)
+      const { data: intentData, error: intentError } = await supabase
+        .from("daily_intentions") // TODO: confirm table name
+        .select("text")
+        .eq("date", selectedDate)
+        .single();
+
+      if (intentError && intentError.code !== "PGRST116") {
+        // ignore "no rows" error
+        console.error("Error loading intention", intentError);
+      }
+
+      if (!cancelled) {
+        setIntention(intentData?.text ?? "");
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedDate]);
 
-  async function loadDay(day: string) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+  const logsForSelectedDay = useMemo(
+    () => logsByDate[selectedDate] || [],
+    [logsByDate, selectedDate]
+  );
 
-    const [routinesRes, logsRes] = await Promise.all([
-      supabase.from("routines").select("*").eq("user_id", user.id),
-      supabase
-        .from("routine_logs")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("day", day),
-    ]);
+  const goldStreak = useMemo(
+    () => computeGoldStreak(foundations, logsByDate, selectedDate),
+    [foundations, logsByDate, selectedDate]
+  );
 
-    if (!routinesRes.error && routinesRes.data) {
-      setRoutines(routinesRes.data as Routine[]);
+  const streakByFoundationId = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const f of foundations) {
+      map[f.id] = computeStreakForFoundation(f, logsByDate, selectedDate);
     }
+    return map;
+  }, [foundations, logsByDate, selectedDate]);
 
-    if (!logsRes.error && logsRes.data) {
-      const byId: Record<string, RoutineLog> = {};
-      (logsRes.data as RoutineLog[]).forEach((log) => {
-        byId[log.routine_id] = log;
+  // ---------- Intentions ----------
+
+  const handleGenerateIntention = async () => {
+    setLoadingIntention(true);
+    try {
+      const res = await fetch("/api/intention", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: selectedDate }),
       });
-      setLogsByRoutine(byId);
+
+      if (!res.ok) {
+        console.error("Intention API error", await res.text());
+        return;
+      }
+
+      const data = await res.json();
+      const text =
+        (data.intention as string) ||
+        (data.text as string) ||
+        (data.message as string) ||
+        "";
+
+      setIntention(text);
+
+      // persist intention to supabase
+      await supabase
+        .from("daily_intentions")
+        .upsert(
+          { date: selectedDate, text },
+          { onConflict: "date" } // TODO: adjust if composite PK
+        );
+    } finally {
+      setLoadingIntention(false);
     }
-  }
+  };
 
-  async function computeGoldStreak() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+  const handleSaveIntentionManually = async (text: string) => {
+    setIntention(text);
+    // best-effort save, but don't block UI
+    await supabase
+      .from("daily_intentions")
+      .upsert(
+        { date: selectedDate, text },
+        { onConflict: "date" } // TODO: adjust if composite PK
+      );
+  };
 
-    const { data, error } = await supabase
-      .from("routine_logs")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("day", { ascending: false })
-      .limit(60);
+  // ---------- Foundation CRUD ----------
 
-    if (error || !data) {
-      setGoldStreak(0);
-      return;
-    }
+  const handleToggleFoundation = async (foundation: Foundation) => {
+    const existing = logsForSelectedDay.find(
+      (l) => l.foundation_id === foundation.id
+    );
 
-    const logs = data as RoutineLog[];
-    const daysSet = new Map<string, RoutineLog[]>();
+    const completed = !(existing?.completed ?? false);
 
-    logs.forEach((log) => {
-      if (!daysSet.has(log.day)) daysSet.set(log.day, []);
-      daysSet.get(log.day)!.push(log);
+    // optimistic update
+    setLogsByDate((prev) => {
+      const dayLogs = [...(prev[selectedDate] || [])];
+      if (existing) {
+        const idx = dayLogs.findIndex((l) => l.id === existing.id);
+        if (idx !== -1) {
+          dayLogs[idx] = { ...existing, completed };
+        }
+      } else {
+        dayLogs.push({
+          id: `temp-${Date.now()}`,
+          foundation_id: foundation.id,
+          date: selectedDate,
+          completed,
+          notes: null,
+        });
+      }
+      return { ...prev, [selectedDate]: dayLogs };
     });
 
-    let streak = 0;
-    let currentDay = format(new Date(), "yyyy-MM-dd");
-
-    while (true) {
-      const dayLogs = daysSet.get(currentDay);
-      if (!dayLogs || dayLogs.length === 0) break;
-      const allCompleted = dayLogs.every((l) => l.completed);
-      if (!allCompleted) break;
-
-      streak += 1;
-      currentDay = format(addDays(parseISO(currentDay), -1), "yyyy-MM-dd");
-    }
-
-    setGoldStreak(streak);
-  }
-
-  async function toggleRoutineCompletion(routine: Routine) {
-    const existing = logsByRoutine[routine.id];
-
+    // persist
     if (existing) {
-      const updated = { ...existing, completed: !existing.completed };
       await supabase
-        .from("routine_logs")
-        .update(updated)
+        .from("foundation_logs")
+        .update({ completed })
         .eq("id", existing.id);
-      setLogsByRoutine((prev) => ({ ...prev, [routine.id]: updated }));
     } else {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
       const { data, error } = await supabase
-        .from("routine_logs")
+        .from("foundation_logs")
         .insert({
-          user_id: user.id,
-          routine_id: routine.id,
-          day: selectedDate,
-          completed: true,
+          foundation_id: foundation.id,
+          date: selectedDate,
+          completed,
           notes: null,
         })
         .select("*")
         .single();
 
       if (!error && data) {
-        setLogsByRoutine((prev) => ({
-          ...prev,
-          [routine.id]: data as RoutineLog,
-        }));
+        setLogsByDate((prev) => {
+          const dayLogs = [...(prev[selectedDate] || [])];
+          // replace temp with real row
+          const tempIdx = dayLogs.findIndex((l) =>
+            String(l.id).startsWith("temp-")
+          );
+          if (tempIdx !== -1) {
+            dayLogs[tempIdx] = data as FoundationLog;
+          } else {
+            dayLogs.push(data as FoundationLog);
+          }
+          return { ...prev, [selectedDate]: dayLogs };
+        });
       }
     }
+  };
 
-    computeGoldStreak();
-  }
+  const handleNotesChange = async (foundation: Foundation, notes: string) => {
+    const existing = logsForSelectedDay.find(
+      (l) => l.foundation_id === foundation.id
+    );
 
-  async function updateNotes(routine: Routine, notes: string) {
-    const existing = logsByRoutine[routine.id];
+    // optimistic
+    setLogsByDate((prev) => {
+      const dayLogs = [...(prev[selectedDate] || [])];
+      if (existing) {
+        const idx = dayLogs.findIndex((l) => l.id === existing.id);
+        if (idx !== -1) {
+          dayLogs[idx] = { ...existing, notes };
+        }
+      } else {
+        dayLogs.push({
+          id: `temp-notes-${Date.now()}`,
+          foundation_id: foundation.id,
+          date: selectedDate,
+          completed: false,
+          notes,
+        });
+      }
+      return { ...prev, [selectedDate]: dayLogs };
+    });
 
     if (existing) {
-      const updated = { ...existing, notes };
       await supabase
-        .from("routine_logs")
-        .update(updated)
+        .from("foundation_logs")
+        .update({ notes })
         .eq("id", existing.id);
-      setLogsByRoutine((prev) => ({ ...prev, [routine.id]: updated }));
     } else {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
       const { data, error } = await supabase
-        .from("routine_logs")
+        .from("foundation_logs")
         .insert({
-          user_id: user.id,
-          routine_id: routine.id,
-          day: selectedDate,
+          foundation_id: foundation.id,
+          date: selectedDate,
           completed: false,
           notes,
         })
@@ -186,200 +492,400 @@ export default function FoundationPage() {
         .single();
 
       if (!error && data) {
-        setLogsByRoutine((prev) => ({
-          ...prev,
-          [routine.id]: data as RoutineLog,
-        }));
+        setLogsByDate((prev) => {
+          const dayLogs = [...(prev[selectedDate] || [])];
+          const tempIdx = dayLogs.findIndex((l) =>
+            String(l.id).startsWith("temp-notes-")
+          );
+          if (tempIdx !== -1) {
+            dayLogs[tempIdx] = data as FoundationLog;
+          } else {
+            dayLogs.push(data as FoundationLog);
+          }
+          return { ...prev, [selectedDate]: dayLogs };
+        });
       }
     }
-  }
+  };
 
-  async function createRoutine() {
-    const title = newTitle.trim();
-    if (!title) return;
+  const handleCreateFoundation = async () => {
+    if (!newTitle.trim()) return;
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+    const insert = {
+      title: newTitle.trim(),
+      schedule_type: newSchedule,
+      x_per_week: newSchedule === "xPerWeek" ? newXPerWeek : null,
+      start_date: selectedDate,
+      end_date: null,
+    };
 
     const { data, error } = await supabase
-      .from("routines")
-      .insert({
-        user_id: user.id,
-        title,
-        schedule_type: "daily",
-        times_per_week: null,
-      })
+      .from("foundations")
+      .insert(insert)
       .select("*")
       .single();
 
-    if (!error && data) {
-      setRoutines((prev) => [...prev, data as Routine]);
-      setNewTitle("");
-      setShowNewRoutine(false);
+    if (error) {
+      console.error("Error creating foundation", error);
+      return;
     }
-  }
 
-  async function deleteRoutine(routineId: string) {
-    await supabase.from("routines").delete().eq("id", routineId);
-    setRoutines((prev) => prev.filter((r) => r.id !== routineId));
-    setLogsByRoutine((prev) => {
-      const clone = { ...prev };
-      delete clone[routineId];
-      return clone;
-    });
-  }
+    setFoundations((prev) => [...prev, data as Foundation]);
+    setNewTitle("");
+    setNewSchedule("daily");
+    setNewXPerWeek(3);
+  };
 
-  const completedCount = routines.filter(
-    (r) => logsByRoutine[r.id]?.completed
+  const handleDeleteFoundationFromTodayForward = async (
+    foundation: Foundation
+  ) => {
+    // Don’t delete past logs. Just mark end_date = selectedDate - 1.
+    const prevDay = dateKey(addDays(parseISO(selectedDate), -1));
+
+    const { data, error } = await supabase
+      .from("foundations")
+      .update({ end_date: prevDay })
+      .eq("id", foundation.id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("Error ending foundation", error);
+      return;
+    }
+
+    const updated = data as Foundation;
+
+    setFoundations((prev) =>
+      prev.map((f) => (f.id === updated.id ? updated : f))
+    );
+  };
+
+  // ---------- Onboarding ----------
+
+  const handleOnboardingChange = (field: keyof OnboardingState, value: string) =>
+    setOnboarding((prev) => ({ ...prev, [field]: value }));
+
+  const handleOnboardingSubmit = async () => {
+    if (!onboarding.priorities.trim() || !onboarding.lifeSummary.trim()) {
+      return;
+    }
+
+    setSavingOnboarding(true);
+    try {
+      await fetch("/api/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(onboarding),
+      });
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(ONBOARDING_KEY, "1");
+      }
+
+      setShowOnboarding(false);
+    } finally {
+      setSavingOnboarding(false);
+    }
+  };
+
+  // ---------- Render ----------
+
+  const habitsDoneToday = foundations.filter((f) =>
+    logsForSelectedDay.some((l) => l.foundation_id === f.id && l.completed)
   ).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
+    <div className="min-h-screen bg-slate-950 text-slate-100 pb-20">
       <AuthGuardHeader />
 
-      <main className="mx-auto max-w-md px-4 pb-28 pt-4">
-        <header className="mb-4 flex items-center justify-between gap-3">
+      <main className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-24 pt-2">
+        {/* Date header */}
+        <section className="mt-2 flex items-center justify-between">
           <div>
-            <p className="text-[11px] uppercase tracking-wide text-slate-400">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
               Today
-            </p>
-            <p className="text-lg font-semibold">
+            </div>
+            <div className="text-xl font-semibold text-slate-50">
               {format(parseISO(selectedDate), "EEEE, MMM d")}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              {completedCount}/{routines.length} habits today
-            </p>
-            <p className="mt-1 text-[11px] text-amber-300">
-              Gold streak: {goldStreak}{" "}
-              {goldStreak === 1 ? "day" : "days"} with all habits done
-            </p>
+            </div>
+            <div className="text-xs text-slate-400">
+              {habitsDoneToday}/{foundations.length} habits today
+            </div>
           </div>
 
-          <div className="flex flex-col items-end gap-2">
+          <div className="text-right">
+            <label className="block text-[11px] uppercase tracking-wide text-slate-400">
+              Date
+            </label>
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="rounded-full bg-slate-900 border border-slate-700 px-3 py-1 text-xs text-slate-100"
+              className="mt-1 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-100 outline-none focus:border-emerald-400"
             />
+            <div className="mt-1 text-[11px] text-amber-300">
+              Gold streak: {goldStreak} {goldStreak === 1 ? "day" : "days"}
+            </div>
           </div>
-        </header>
+        </section>
 
-        {/* Intention */}
-        <section className="mb-4 rounded-2xl border border-slate-700 bg-slate-900/80 p-4">
+        {/* Daily intention */}
+        <section className="rounded-2xl bg-slate-900/80 p-4 ring-1 ring-slate-800">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            <h2 className="text-xs font-semibold tracking-wide text-slate-300 uppercase">
               Daily intention
-            </p>
+            </h2>
             <button
-              type="button"
+              onClick={handleGenerateIntention}
               disabled={loadingIntention}
-              onClick={async () => {
-                setLoadingIntention(true);
-                try {
-                  const res = await fetch("/api/intention", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ date: selectedDate }),
-                  });
-                  const json = await res.json();
-                  setIntention(json.intention ?? "");
-                } finally {
-                  setLoadingIntention(false);
-                }
-              }}
-              className="text-[11px] text-emerald-400"
+              className="text-[11px] text-emerald-300 hover:text-emerald-200 disabled:opacity-60"
             >
-              {loadingIntention ? "..." : "New"}
+              {loadingIntention ? "…" : "New"}
             </button>
           </div>
           <textarea
             value={intention}
-            onChange={(e) => setIntention(e.target.value)}
-            placeholder="Today, I will..."
-            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100 min-h-[72px]"
+            onChange={(e) => handleSaveIntentionManually(e.target.value)}
+            rows={3}
+            className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-400"
           />
         </section>
 
-        {/* Habits */}
-        <section className="mb-4">
+        {/* Foundations list */}
+        <section>
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            <h2 className="text-xs font-semibold tracking-wide text-slate-300 uppercase">
               Daily habits
-            </p>
+            </h2>
             <button
-              onClick={() => setShowNewRoutine((v) => !v)}
-              className="text-[11px] text-emerald-400"
+              onClick={handleCreateFoundation}
+              className="text-[11px] text-emerald-300 hover:text-emerald-200"
             >
-              {showNewRoutine ? "Close" : "+ Add"}
+              + Add
             </button>
           </div>
 
-          {showNewRoutine && (
-            <div className="mb-4 rounded-2xl border border-slate-700 bg-slate-900/80 p-3 text-xs">
-              <p className="mb-1 text-slate-300">New habit</p>
-              <input
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Habit name..."
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-100"
-              />
-              <button
-                onClick={createRoutine}
-                className="mt-3 w-full rounded-full bg-emerald-500 py-1.5 text-xs font-semibold text-slate-950"
-              >
-                Save habit
-              </button>
+          {/* New foundation inline editor */}
+          <div className="mb-3 rounded-2xl bg-slate-900/70 p-3 ring-1 ring-slate-800">
+            <input
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="New habit title…"
+              className="mb-2 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-1.5 text-xs text-slate-100 outline-none focus:border-emerald-400"
+            />
+            <div className="flex items-center justify-between gap-2 text-[11px] text-slate-300">
+              <div className="flex flex-wrap gap-1">
+                {(["daily", "weekdays", "weekly", "monthly", "xPerWeek"] as ScheduleType[]).map(
+                  (opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setNewSchedule(opt)}
+                      className={`rounded-full px-2 py-0.5 ${
+                        newSchedule === opt
+                          ? "bg-emerald-500 text-slate-950"
+                          : "bg-slate-800 text-slate-300"
+                      }`}
+                    >
+                      {opt === "xPerWeek" ? "x/week" : opt}
+                    </button>
+                  )
+                )}
+              </div>
+
+              {newSchedule === "xPerWeek" && (
+                <div className="flex items-center gap-1">
+                  <span>x</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={7}
+                    value={newXPerWeek}
+                    onChange={(e) =>
+                      setNewXPerWeek(Number(e.target.value || 3))
+                    }
+                    className="h-6 w-10 rounded border border-slate-700 bg-slate-950 px-1 text-xs text-slate-100 outline-none"
+                  />
+                  <span className="text-slate-400">per week</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {loading && (
+            <div className="py-6 text-center text-xs text-slate-400">
+              Loading your foundations…
             </div>
           )}
 
-          {routines.map((routine) => {
-            const log = logsByRoutine[routine.id];
-            const completed = !!log?.completed;
+          {!loading &&
+            foundations.map((f) => {
+              const logs = logsForSelectedDay;
+              const log = logs.find((l) => l.foundation_id === f.id);
+              const completed = log?.completed ?? false;
+              const streak = streakByFoundationId[f.id] ?? 0;
 
-            return (
-              <div
-                key={routine.id}
-                className="mb-3 rounded-2xl border border-slate-700 bg-slate-900/80 p-3 text-xs"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    onClick={() => toggleRoutineCompletion(routine)}
-                    className={`flex h-6 w-6 items-center justify-center rounded-full border ${
-                      completed
-                        ? "border-emerald-400 bg-emerald-500 text-slate-950"
-                        : "border-slate-600 bg-slate-900 text-slate-500"
-                    }`}
-                  >
-                    {completed ? "✓" : ""}
-                  </button>
-                  <div className="flex-1">
-                    <p className="font-medium text-slate-100">
-                      {routine.title}
-                    </p>
-                    <p className="text-[11px] text-slate-400">Daily</p>
+              return (
+                <div
+                  key={f.id}
+                  className="mb-3 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleFoundation(f)}
+                      className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border ${
+                        completed
+                          ? "border-emerald-400 bg-emerald-500 text-slate-950"
+                          : "border-slate-600 bg-slate-950 text-slate-400"
+                      }`}
+                    >
+                      {completed ? "✓" : ""}
+                    </button>
+
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-50">
+                            {f.title}
+                          </div>
+                          <div className="text-[11px] text-slate-400">
+                            {f.schedule_type === "daily"
+                              ? "Daily"
+                              : f.schedule_type === "weekdays"
+                              ? "Weekdays"
+                              : f.schedule_type === "weekly"
+                              ? "Weekly"
+                              : f.schedule_type === "monthly"
+                              ? "Monthly"
+                              : `${f.x_per_week}x per week`}
+                            {streak > 0 && (
+                              <span className="ml-2 text-emerald-300">
+                                • Streak: {streak}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleDeleteFoundationFromTodayForward(f)
+                          }
+                          className="text-[11px] text-slate-400 hover:text-red-300"
+                        >
+                          Remove →
+                        </button>
+                      </div>
+
+                      <textarea
+                        value={log?.notes ?? ""}
+                        onChange={(e) => handleNotesChange(f, e.target.value)}
+                        placeholder="Notes or extra effort for this habit today..."
+                        rows={2}
+                        className="mt-2 w-full resize-none rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-1.5 text-xs text-slate-100 outline-none focus:border-emerald-400"
+                      />
+                    </div>
                   </div>
-                  <button
-                    onClick={() => deleteRoutine(routine.id)}
-                    className="text-[11px] text-red-400"
-                  >
-                    Remove →
-                  </button>
                 </div>
-
-                <textarea
-                  value={log?.notes ?? ""}
-                  onChange={(e) => updateNotes(routine, e.target.value)}
-                  placeholder="Notes or extra effort for this habit today..."
-                  className="mt-3 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 min-h-[56px]"
-                />
-              </div>
-            );
-          })}
+              );
+            })}
         </section>
       </main>
+
+      {/* ---------- Onboarding modal ---------- */}
+      {showOnboarding && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-slate-900 p-5 ring-1 ring-slate-700">
+            <h2 className="mb-1 text-sm font-semibold text-slate-50">
+              Welcome to Foundation
+            </h2>
+            <p className="mb-4 text-xs text-slate-300">
+              This quick primer is private and only used to personalize your AI
+              intentions, goals, and insights. It’s a one-time thing.
+            </p>
+
+            <div className="space-y-4 text-xs text-slate-200">
+              <div>
+                <p className="mb-1 font-semibold">
+                  1. Rank from most to least important for you
+                </p>
+                <p className="mb-2 text-[11px] text-slate-400">
+                  Use the words{" "}
+                  <span className="font-semibold">
+                    Financial, Family, Friends (Community), Personal Growth.
+                  </span>
+                </p>
+                <textarea
+                  rows={2}
+                  value={onboarding.priorities}
+                  onChange={(e) =>
+                    handleOnboardingChange("priorities", e.target.value)
+                  }
+                  placeholder="Example: Personal Growth, Family, Financial, Friends (Community)"
+                  className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-400"
+                />
+              </div>
+
+              <div>
+                <p className="mb-1 font-semibold">
+                  2. Briefly describe your life today and where you’d like to be
+                  in 10 years
+                </p>
+                <textarea
+                  rows={3}
+                  value={onboarding.lifeSummary}
+                  onChange={(e) =>
+                    handleOnboardingChange("lifeSummary", e.target.value)
+                  }
+                  placeholder="Finances, family, community, personal growth now – and your ideal 10-year future."
+                  className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-400"
+                />
+              </div>
+
+              <div>
+                <p className="mb-1 font-semibold">
+                  3. How would you describe your ideology or worldview?
+                </p>
+                <textarea
+                  rows={2}
+                  value={onboarding.ideology}
+                  onChange={(e) =>
+                    handleOnboardingChange("ideology", e.target.value)
+                  }
+                  placeholder="E.g. Christian, stoic, freedom lover, capitalist, other…"
+                  className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-400"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowOnboarding(false)}
+                className="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+              >
+                Skip for now
+              </button>
+              <button
+                type="button"
+                onClick={handleOnboardingSubmit}
+                disabled={savingOnboarding}
+                className="rounded-full bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+              >
+                {savingOnboarding ? "Saving…" : "Save & continue"}
+              </button>
+            </div>
+
+            <p className="mt-3 text-[10px] text-slate-500">
+              Keeps your login. After reset (from Settings) you’ll see these
+              questions again so goals and daily intention can be recreated by
+              AI — but you won’t be logged out.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
