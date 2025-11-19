@@ -1,77 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
+import { supabase } from "@/lib/supabaseClient";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
 import { applySavedTextSize } from "@/lib/textSize";
 
-// ---- Types ----
-type ScheduleType = "daily" | "weekdays" | "weekly" | "monthly" | "xPerWeek";
-
-type Routine = {
+type ScheduleType = "daily" | "weekdays" | "weekly" | "monthly";
+interface Routine {
   id: string;
-  name: string;
-  schedule: ScheduleType;
-  xPerWeek?: number;
-  createdAt: string; // YYYY-MM-DD
-  deletedFrom?: string; // YYYY-MM-DD
-};
-
-type DayRoutineState = { done: boolean; notes: string };
-
-type LogsByDate = {
-  [date: string]: { [routineId: string]: DayRoutineState };
-};
-
-type OnboardingProfile = {
-  priorities: string;
-  lifeSummary: string;
-  ideology: string;
-  keyTruth?: string;
-  aiVoice?: string;
-  board?: { name: string; role: string; why: string }[];
-};
-
-type GeneratedHorizon = "3y" | "1y" | "6m" | "1m";
-
-type StoredGoal = {
-  id: string;
+  user_id: string;
   title: string;
-  targetDate?: string;
-  status: "not_started" | "in_progress" | "achieved";
-  pinned?: boolean;
-  horizon: GeneratedHorizon;
-  sortIndex?: number;
-};
-
-// ---- Storage keys ----
-const ROUTINE_STORAGE_KEY = "foundation_routines_v1";
-const LOGS_STORAGE_KEY = "foundation_logs_v1";
-const GOLD_STORAGE_KEY = "foundation_gold_streak_v1";
-const DATE_STORAGE_KEY = "foundation_last_date_v1";
-const PROFILE_STORAGE_KEY = "foundation_profile_v1";
-const GOALS_STORAGE_KEY = "foundation_goals_v1";
-
-function formatDate(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  schedule_type: ScheduleType;
+  times_per_week: number | null;
 }
 
-function addMonths(date: Date, months: number) {
-  const d = new Date(date);
-  d.setMonth(d.getMonth() + months);
-  return d;
+interface RoutineLog {
+  id: string;
+  routine_id: string;
+  user_id: string;
+  day: string; // yyyy-MM-dd
+  completed: boolean;
+  notes: string | null;
 }
 
-// ---- Component ----
 export default function FoundationPage() {
-  // Apply text-size preference on mount
-  useEffect(() => {
-    applySavedTextSize();
-  }, []);
-
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), "yyyy-MM-dd")
   );
@@ -79,642 +32,354 @@ export default function FoundationPage() {
   const [loadingIntention, setLoadingIntention] = useState(false);
 
   const [routines, setRoutines] = useState<Routine[]>([]);
-  const [logs, setLogs] = useState<LogsByDate>({});
-  const [goldStreak, setGoldStreak] = useState(0);
-
-  const [newOpen, setNewOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newSchedule, setNewSchedule] = useState<ScheduleType>("daily");
-  const [newXPerWeek, setNewXPerWeek] = useState("3");
-
-  // onboarding
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [obPriorities, setObPriorities] = useState("");
-  const [obLifeSummary, setObLifeSummary] = useState("");
-  const [obIdeology, setObIdeology] = useState("");
-  const [obLoading, setObLoading] = useState(false);
-  const [obError, setObError] = useState<string | null>(null);
-
-  const headerLabel = useMemo(
-    () => format(parseISO(selectedDate), "EEEE, MMM d"),
-    [selectedDate]
+  const [logsByRoutine, setLogsByRoutine] = useState<Record<string, RoutineLog>>(
+    {}
   );
+  const [goldStreak, setGoldStreak] = useState(0);
+  const [showNewRoutine, setShowNewRoutine] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
 
-  // ---- Initial load ----
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const today = format(new Date(), "yyyy-MM-dd");
-    const storedDate = localStorage.getItem(DATE_STORAGE_KEY);
-    setSelectedDate(storedDate || today);
-
-    // routines
-    const rRaw = localStorage.getItem(ROUTINE_STORAGE_KEY);
-    if (rRaw) {
-      try {
-        setRoutines(JSON.parse(rRaw));
-      } catch {
-        // ignore
-      }
-    } else {
-      // default starter habits
-      const defaults: Routine[] = [
-        {
-          id: crypto.randomUUID(),
-          name: "Complete A+ Problem for today",
-          schedule: "daily",
-          createdAt: today,
-        },
-        {
-          id: crypto.randomUUID(),
-          name: "Journal and reflect",
-          schedule: "daily",
-          createdAt: today,
-        },
-        {
-          id: crypto.randomUUID(),
-          name: "Move your body 45+ min",
-          schedule: "daily",
-          createdAt: today,
-        },
-        {
-          id: crypto.randomUUID(),
-          name: "Breathing exercises",
-          schedule: "daily",
-          createdAt: today,
-        },
-      ];
-      setRoutines(defaults);
-      localStorage.setItem(ROUTINE_STORAGE_KEY, JSON.stringify(defaults));
-    }
-
-    // logs
-    const lRaw = localStorage.getItem(LOGS_STORAGE_KEY);
-    if (lRaw) {
-      try {
-        setLogs(JSON.parse(lRaw));
-      } catch {
-        // ignore
-      }
-    }
-
-    // streak
-    const gRaw = localStorage.getItem(GOLD_STORAGE_KEY);
-    if (gRaw && !Number.isNaN(Number(gRaw))) {
-      setGoldStreak(Number(gRaw));
-    }
-
-    // onboarding
-    const profileRaw = localStorage.getItem(PROFILE_STORAGE_KEY);
-    if (!profileRaw) setShowOnboarding(true);
+    applySavedTextSize();
   }, []);
 
-  const persistRoutines = (next: Routine[]) =>
-    localStorage.setItem(ROUTINE_STORAGE_KEY, JSON.stringify(next));
-  const persistLogs = (next: LogsByDate) =>
-    localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(next));
-  const persistGold = (value: number) =>
-    localStorage.setItem(GOLD_STORAGE_KEY, String(value));
-
-  const getProfile = (): OnboardingProfile | null => {
-    if (typeof window === "undefined") return null;
-    const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as OnboardingProfile;
-    } catch {
-      return null;
-    }
-  };
-
-  // ---- AI intention ----
   useEffect(() => {
-    const run = async () => {
-      try {
-        setLoadingIntention(true);
-        const profile = getProfile();
-        const res = await fetch("/api/intention", {
-          method: "POST",
-          body: JSON.stringify({ profile }),
-        });
-        const data = await res.json();
-        if (data?.intention) setIntention(data.intention);
-      } catch {
-        // ignore
-      } finally {
-        setLoadingIntention(false);
-      }
-    };
-    run();
-  }, []);
+    loadDay(selectedDate);
+    computeGoldStreak();
+  }, [selectedDate]);
 
-  // ---- Routines per date ----
-  const getActiveRoutinesForDate = (date: string) =>
-    routines.filter(
-      (r) => !(r.createdAt > date || (r.deletedFrom && date >= r.deletedFrom))
-    );
+  async function loadDay(day: string) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
 
-  const allActiveCompleteOn = (date: string, logsObj: LogsByDate) => {
-    const active = getActiveRoutinesForDate(date);
-    if (active.length === 0) return false;
-    const day = logsObj[date] ?? {};
-    return active.every((r) => day[r.id]?.done === true);
-  };
+    const [routinesRes, logsRes] = await Promise.all([
+      supabase.from("routines").select("*").eq("user_id", user.id),
+      supabase
+        .from("routine_logs")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("day", day),
+    ]);
 
-  const computeGoldStreakUpTo = (date: string, logsObj: LogsByDate): number => {
-    let streak = 0;
-    let cursor = parseISO(date);
-    for (let i = 0; i < 365; i++) {
-      const ds = format(cursor, "yyyy-MM-dd");
-      if (!allActiveCompleteOn(ds, logsObj)) break;
-      streak += 1;
-      cursor = addDays(cursor, -1);
+    if (!routinesRes.error && routinesRes.data) {
+      setRoutines(routinesRes.data as Routine[]);
     }
-    return streak;
-  };
 
-  const updateLogs = (updater: (prev: LogsByDate) => LogsByDate) => {
-    setLogs((prev) => {
-      const next = updater(prev);
-      persistLogs(next);
-      const s = computeGoldStreakUpTo(selectedDate, next);
-      setGoldStreak(s);
-      persistGold(s);
-      return next;
-    });
-  };
-
-  const toggleRoutine = (id: string) =>
-    updateLogs((prev) => {
-      const day = { ...(prev[selectedDate] ?? {}) };
-      const current = day[id] ?? { done: false, notes: "" };
-      day[id] = { ...current, done: !current.done };
-      return { ...prev, [selectedDate]: day };
-    });
-
-  const updateNotes = (id: string, notes: string) =>
-    updateLogs((prev) => {
-      const day = { ...(prev[selectedDate] ?? {}) };
-      const current = day[id] ?? { done: false, notes: "" };
-      day[id] = { ...current, notes };
-      return { ...prev, [selectedDate]: day };
-    });
-
-  const addRoutine = () => {
-    if (!newName.trim()) return;
-    const routine: Routine = {
-      id: crypto.randomUUID(),
-      name: newName.trim(),
-      schedule: newSchedule,
-      createdAt: selectedDate,
-      ...(newSchedule === "xPerWeek"
-        ? { xPerWeek: Number(newXPerWeek) || 3 }
-        : {}),
-    };
-    setRoutines((prev) => {
-      const next = [...prev, routine];
-      persistRoutines(next);
-      return next;
-    });
-    setNewName("");
-    setNewSchedule("daily");
-    setNewXPerWeek("3");
-    setNewOpen(false);
-  };
-
-  const deleteRoutineForFuture = (id: string) =>
-    setRoutines((prev) => {
-      const next = prev.map((r) =>
-        r.id === id ? { ...r, deletedFrom: selectedDate } : r
-      );
-      persistRoutines(next);
-      const s = computeGoldStreakUpTo(selectedDate, logs);
-      setGoldStreak(s);
-      persistGold(s);
-      return next;
-    });
-
-  const scheduleLabel = (r: Routine) => {
-    switch (r.schedule) {
-      case "xPerWeek":
-        return r.xPerWeek ? `${r.xPerWeek}×/week` : "Several times per week";
-      case "weekdays":
-        return "Weekdays";
-      case "weekly":
-        return "Weekly";
-      case "monthly":
-        return "Monthly";
-      default:
-        return "Daily";
+    if (!logsRes.error && logsRes.data) {
+      const byId: Record<string, RoutineLog> = {};
+      (logsRes.data as RoutineLog[]).forEach((log) => {
+        byId[log.routine_id] = log;
+      });
+      setLogsByRoutine(byId);
     }
-  };
+  }
 
-  const activeRoutines = getActiveRoutinesForDate(selectedDate);
-  const day = logs[selectedDate] ?? {};
-  const completedCount = activeRoutines.filter((r) => day[r.id]?.done).length;
+  async function computeGoldStreak() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
 
-  const dateInputId = "foundation-date-input";
+    const { data, error } = await supabase
+      .from("routine_logs")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("day", { ascending: false })
+      .limit(60);
 
-  const autoGrow = (el: HTMLTextAreaElement | null) => {
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  };
-
-  // ---- Onboarding submit ----
-  const handleOnboardingSubmit = async () => {
-    if (!obPriorities.trim() || !obLifeSummary.trim() || !obIdeology.trim()) {
-      setObError("Please answer all three questions.");
+    if (error || !data) {
+      setGoldStreak(0);
       return;
     }
-    setObError(null);
-    setObLoading(true);
 
-    try {
-      const res = await fetch("/api/onboarding", {
-        method: "POST",
-        body: JSON.stringify({
-          priorities: obPriorities,
-          lifeSummary: obLifeSummary,
-          ideology: obIdeology,
-        }),
-      });
-      const data = await res.json();
+    const logs = data as RoutineLog[];
+    const daysSet = new Map<string, RoutineLog[]>();
 
-      const profile: OnboardingProfile = {
-        priorities: obPriorities,
-        lifeSummary: obLifeSummary,
-        ideology: obIdeology,
-        keyTruth: data?.keyTruth ?? undefined,
-        aiVoice: data?.aiVoice ?? undefined,
-        board: Array.isArray(data?.board) ? data.board : undefined,
-      };
-      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+    logs.forEach((log) => {
+      if (!daysSet.has(log.day)) daysSet.set(log.day, []);
+      daysSet.get(log.day)!.push(log);
+    });
 
-      // Simple seeding: one 3-year goal from keyTruth if no goals yet
-      const existingRaw = localStorage.getItem(GOALS_STORAGE_KEY);
-      if (!existingRaw && data?.keyTruth) {
-        const baseDate = new Date();
-        const target = addMonths(baseDate, 36);
-        const seeded: StoredGoal[] = [
-          {
-            id: crypto.randomUUID(),
-            title: `Key truth: ${String(data.keyTruth).trim()}`,
-            horizon: "3y",
-            status: "not_started",
-            pinned: true,
-            targetDate: formatDate(target),
-            sortIndex: 1,
-          },
-        ];
-        localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(seeded));
-      }
+    let streak = 0;
+    let currentDay = format(new Date(), "yyyy-MM-dd");
 
-      setShowOnboarding(false);
-    } catch (e) {
-      console.error(e);
-      setObError(
-        "Something went wrong creating your starter profile. You can still use the app normally."
-      );
-    } finally {
-      setObLoading(false);
+    while (true) {
+      const dayLogs = daysSet.get(currentDay);
+      if (!dayLogs || dayLogs.length === 0) break;
+      const allCompleted = dayLogs.every((l) => l.completed);
+      if (!allCompleted) break;
+
+      streak += 1;
+      currentDay = format(addDays(parseISO(currentDay), -1), "yyyy-MM-dd");
     }
-  };
 
-  const autoGrowOnChange =
-    (update: (v: string) => void) =>
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      update(e.target.value);
-      autoGrow(e.currentTarget);
-    };
+    setGoldStreak(streak);
+  }
 
-  const autoGrowNotes =
-    (id: string) =>
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      updateNotes(id, e.target.value);
-      autoGrow(e.currentTarget);
-    };
+  async function toggleRoutineCompletion(routine: Routine) {
+    const existing = logsByRoutine[routine.id];
+
+    if (existing) {
+      const updated = { ...existing, completed: !existing.completed };
+      await supabase
+        .from("routine_logs")
+        .update(updated)
+        .eq("id", existing.id);
+      setLogsByRoutine((prev) => ({ ...prev, [routine.id]: updated }));
+    } else {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("routine_logs")
+        .insert({
+          user_id: user.id,
+          routine_id: routine.id,
+          day: selectedDate,
+          completed: true,
+          notes: null,
+        })
+        .select("*")
+        .single();
+
+      if (!error && data) {
+        setLogsByRoutine((prev) => ({
+          ...prev,
+          [routine.id]: data as RoutineLog,
+        }));
+      }
+    }
+
+    computeGoldStreak();
+  }
+
+  async function updateNotes(routine: Routine, notes: string) {
+    const existing = logsByRoutine[routine.id];
+
+    if (existing) {
+      const updated = { ...existing, notes };
+      await supabase
+        .from("routine_logs")
+        .update(updated)
+        .eq("id", existing.id);
+      setLogsByRoutine((prev) => ({ ...prev, [routine.id]: updated }));
+    } else {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("routine_logs")
+        .insert({
+          user_id: user.id,
+          routine_id: routine.id,
+          day: selectedDate,
+          completed: false,
+          notes,
+        })
+        .select("*")
+        .single();
+
+      if (!error && data) {
+        setLogsByRoutine((prev) => ({
+          ...prev,
+          [routine.id]: data as RoutineLog,
+        }));
+      }
+    }
+  }
+
+  async function createRoutine() {
+    const title = newTitle.trim();
+    if (!title) return;
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("routines")
+      .insert({
+        user_id: user.id,
+        title,
+        schedule_type: "daily",
+        times_per_week: null,
+      })
+      .select("*")
+      .single();
+
+    if (!error && data) {
+      setRoutines((prev) => [...prev, data as Routine]);
+      setNewTitle("");
+      setShowNewRoutine(false);
+    }
+  }
+
+  async function deleteRoutine(routineId: string) {
+    await supabase.from("routines").delete().eq("id", routineId);
+    setRoutines((prev) => prev.filter((r) => r.id !== routineId));
+    setLogsByRoutine((prev) => {
+      const clone = { ...prev };
+      delete clone[routineId];
+      return clone;
+    });
+  }
+
+  const completedCount = routines.filter(
+    (r) => logsByRoutine[r.id]?.completed
+  ).length;
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] space-y-4 bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-slate-950 text-slate-50">
       <AuthGuardHeader />
 
-      {/* Onboarding overlay */}
-      {showOnboarding && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-slate-900 p-4 shadow-2xl ring-1 ring-amber-500/20">
-            <h2 className="mb-2 text-lg font-semibold text-amber-50">
-              Welcome to Foundation
-            </h2>
-            <p className="mb-3 text-xs text-slate-300">
-              This quick primer is <span className="font-semibold">private</span> and only used to
-              personalize your AI intentions, goals, and insights. It&apos;s a one-time
-              thing.
-            </p>
-
-            <div className="space-y-3 text-xs">
-              <div className="space-y-1">
-                <label className="font-medium text-slate-100">
-                  1. Rank from most to least important for you
-                </label>
-                <p className="text-[11px] text-slate-400">
-                  Use <strong>Financial, Family, Friends (Community), Personal Growth</strong>.
-                </p>
-                <textarea
-                  value={obPriorities}
-                  onChange={(e) => {
-                    setObPriorities(e.target.value);
-                    autoGrow(e.currentTarget);
-                  }}
-                  rows={2}
-                  className="w-full overflow-hidden resize-none rounded-xl border border-slate-600 bg-slate-950/75 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
-                  placeholder="Example: Personal Growth, Family, Financial, Friends (Community)"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-medium text-slate-100">
-                  2. Briefly describe your life today and where you&apos;d like to be in 10
-                  years
-                </label>
-                <textarea
-                  value={obLifeSummary}
-                  onChange={(e) => {
-                    setObLifeSummary(e.target.value);
-                    autoGrow(e.currentTarget);
-                  }}
-                  rows={4}
-                  className="w-full overflow-hidden resize-none rounded-xl border border-slate-600 bg-slate-950/75 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
-                  placeholder="Finances, family, community, personal growth now — and your ideal 10-year future."
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-medium text-slate-100">
-                  3. How would you describe your ideology or worldview?
-                </label>
-                <textarea
-                  value={obIdeology}
-                  onChange={(e) => {
-                    setObIdeology(e.target.value);
-                    autoGrow(e.currentTarget);
-                  }}
-                  rows={2}
-                  className="w-full overflow-hidden resize-none rounded-xl border border-slate-600 bg-slate-950/75 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-500"
-                  placeholder="E.g. Christian, stoic, freedom lover, capitalist, other…"
-                />
-              </div>
-
-              {obError && <p className="text-[11px] text-red-400">{obError}</p>}
-
-              <div className="mt-2 flex items-center justify-end gap-2">
-                <button
-                  disabled={obLoading}
-                  onClick={handleOnboardingSubmit}
-                  className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow disabled:opacity-50"
-                >
-                  {obLoading ? "Creating your plan…" : "Save & continue"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Header */}
-      <header className="space-y-1 pt-2">
-        <div className="flex items-center justify-between gap-2">
+      <main className="mx-auto max-w-md px-4 pb-28 pt-4">
+        <header className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
+            <p className="text-[11px] uppercase tracking-wide text-slate-400">
               Today
             </p>
-            <h1 className="text-2xl font-semibold text-amber-50">
-              {headerLabel}
-            </h1>
+            <p className="text-lg font-semibold">
+              {format(parseISO(selectedDate), "EEEE, MMM d")}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              {completedCount}/{routines.length} habits today
+            </p>
+            <p className="mt-1 text-[11px] text-amber-300">
+              Gold streak: {goldStreak}{" "}
+              {goldStreak === 1 ? "day" : "days"} with all habits done
+            </p>
           </div>
 
-          <div className="relative">
+          <div className="flex flex-col items-end gap-2">
             <input
-              id={dateInputId}
               type="date"
               value={selectedDate}
-              onChange={(e) => {
-                const next = e.target.value;
-                setSelectedDate(next);
-                localStorage.setItem(DATE_STORAGE_KEY, next);
-                const s = computeGoldStreakUpTo(next, logs);
-                setGoldStreak(s);
-                persistGold(s);
-              }}
-              className="peer w-[140px] rounded-full border border-slate-600 bg-slate-900 px-3 py-1 text-xs text-slate-200 outline-none [color-scheme:dark] focus:border-emerald-500"
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="rounded-full bg-slate-900 border border-slate-700 px-3 py-1 text-xs text-slate-100"
             />
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                const input = document.getElementById(
-                  dateInputId
-                ) as HTMLInputElement | null;
-                const anyInput = input as any;
-                if (input && typeof anyInput.showPicker === "function") {
-                  anyInput.showPicker();
-                } else {
-                  input?.focus();
-                }
-              }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-slate-400 hover:text-emerald-400"
-            >
-              📅
-            </button>
           </div>
-        </div>
+        </header>
 
-        <div className="flex items-center justify-between text-[11px]">
-          <span className="text-slate-400">
-            {completedCount}/{activeRoutines.length} habits today
-          </span>
-          <span className="text-amber-400">
-            Gold streak: {goldStreak} day{goldStreak === 1 ? "" : "s"}
-          </span>
-        </div>
-      </header>
-
-      {/* Intention */}
-      <section className="space-y-2 rounded-2xl bg-slate-900 p-3 ring-1 ring-slate-700">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Daily intention
-          </h2>
-          <button
-            disabled={loadingIntention}
-            onClick={async () => {
-              try {
-                setLoadingIntention(true);
-                const profile = getProfile();
-                const res = await fetch("/api/intention", {
-                  method: "POST",
-                  body: JSON.stringify({ profile }),
-                });
-                const data = await res.json();
-                if (data?.intention) setIntention(data.intention);
-              } finally {
-                setLoadingIntention(false);
-              }
-            }}
-            className="text-[11px] text-emerald-400 underline disabled:opacity-40"
-          >
-            {loadingIntention ? "Thinking…" : "New"}
-          </button>
-        </div>
-        <textarea
-          value={intention}
-          onChange={autoGrowOnChange(setIntention)}
-          rows={3}
-          className="w-full whitespace-pre-wrap break-words overflow-hidden resize-none rounded-xl border border-slate-600 bg-slate-950/75 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
-        />
-      </section>
-
-      {/* Habits */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Daily habits
-          </h2>
-          <button
-            onClick={() => setNewOpen((x) => !x)}
-            className="text-[11px] text-emerald-400"
-          >
-            {newOpen ? "Cancel" : "+ Add"}
-          </button>
-        </div>
-
-        {newOpen && (
-          <div className="space-y-2 rounded-2xl bg-slate-900 p-3 ring-1 ring-slate-700">
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="New habit (e.g., Read 10 pages)"
-              className="w-full rounded-xl border border-slate-600 bg-slate-950/75 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
-            />
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-              <span>Frequency</span>
-              <select
-                value={newSchedule}
-                onChange={(e) =>
-                  setNewSchedule(e.target.value as ScheduleType)
-                }
-                className="rounded-full border border-slate-600 bg-slate-950/75 px-2 py-1 text-slate-100 outline-none focus:border-emerald-500"
-              >
-                <option value="daily">Daily</option>
-                <option value="weekdays">Weekdays</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="xPerWeek">X times per week</option>
-              </select>
-              {newSchedule === "xPerWeek" && (
-                <>
-                  <span>×</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={7}
-                    value={newXPerWeek}
-                    onChange={(e) => setNewXPerWeek(e.target.value)}
-                    className="w-14 rounded-xl border border-slate-600 bg-slate-950/75 px-2 py-1 text-slate-100 outline-none focus:border-emerald-500"
-                  />
-                  <span>per week</span>
-                </>
-              )}
-            </div>
-            <p className="text-[11px] text-slate-500">
-              This habit will exist from <strong>{selectedDate}</strong> onward
-              until you remove it.
+        {/* Intention */}
+        <section className="mb-4 rounded-2xl border border-slate-700 bg-slate-900/80 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Daily intention
             </p>
             <button
-              onClick={addRoutine}
-              className="w-full rounded-xl bg-emerald-500 py-2 text-sm font-medium text-slate-950"
+              type="button"
+              disabled={loadingIntention}
+              onClick={async () => {
+                setLoadingIntention(true);
+                try {
+                  const res = await fetch("/api/intention", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ date: selectedDate }),
+                  });
+                  const json = await res.json();
+                  setIntention(json.intention ?? "");
+                } finally {
+                  setLoadingIntention(false);
+                }
+              }}
+              className="text-[11px] text-emerald-400"
             >
-              Save habit
+              {loadingIntention ? "..." : "New"}
             </button>
           </div>
-        )}
+          <textarea
+            value={intention}
+            onChange={(e) => setIntention(e.target.value)}
+            placeholder="Today, I will..."
+            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100 min-h-[72px]"
+          />
+        </section>
 
-        <div className="space-y-2 pb-2">
-          {activeRoutines.map((routine) => {
-            const state = day[routine.id] ?? { done: false, notes: "" };
-            const isDone = state.done;
+        {/* Habits */}
+        <section className="mb-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Daily habits
+            </p>
+            <button
+              onClick={() => setShowNewRoutine((v) => !v)}
+              className="text-[11px] text-emerald-400"
+            >
+              {showNewRoutine ? "Close" : "+ Add"}
+            </button>
+          </div>
 
-            let streak = 0;
-            {
-              let cursor = parseISO(selectedDate);
-              for (let i = 0; i < 365; i++) {
-                const ds = format(cursor, "yyyy-MM-dd");
-                if (ds < routine.createdAt) break;
-                if (routine.deletedFrom && ds >= routine.deletedFrom) break;
-                if (logs[ds]?.[routine.id]?.done) {
-                  streak += 1;
-                  cursor = addDays(cursor, -1);
-                } else break;
-              }
-            }
+          {showNewRoutine && (
+            <div className="mb-4 rounded-2xl border border-slate-700 bg-slate-900/80 p-3 text-xs">
+              <p className="mb-1 text-slate-300">New habit</p>
+              <input
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Habit name..."
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-100"
+              />
+              <button
+                onClick={createRoutine}
+                className="mt-3 w-full rounded-full bg-emerald-500 py-1.5 text-xs font-semibold text-slate-950"
+              >
+                Save habit
+              </button>
+            </div>
+          )}
+
+          {routines.map((routine) => {
+            const log = logsByRoutine[routine.id];
+            const completed = !!log?.completed;
 
             return (
               <div
                 key={routine.id}
-                className="space-y-2 rounded-2xl bg-slate-900 p-3 ring-1 ring-slate-700"
+                className="mb-3 rounded-2xl border border-slate-700 bg-slate-900/80 p-3 text-xs"
               >
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-3">
                   <button
-                    onClick={() => toggleRoutine(routine.id)}
-                    className="flex flex-1 items-center gap-3 text-left"
+                    onClick={() => toggleRoutineCompletion(routine)}
+                    className={`flex h-6 w-6 items-center justify-center rounded-full border ${
+                      completed
+                        ? "border-emerald-400 bg-emerald-500 text-slate-950"
+                        : "border-slate-600 bg-slate-900 text-slate-500"
+                    }`}
                   >
-                    <div
-                      className={`flex h-7 w-7 flex-none items-center justify-center rounded-full border-2 ${
-                        isDone
-                          ? "border-emerald-400 bg-emerald-500/10"
-                          : "border-slate-600"
-                      }`}
-                      aria-checked={isDone}
-                      role="checkbox"
-                    >
-                      {isDone && (
-                        <span className="text-xs text-emerald-300">●</span>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <p className="whitespace-pre-wrap break-words text-sm font-medium text-slate-50">
-                        {routine.name}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                        <span>{scheduleLabel(routine)}</span>
-                        {streak > 0 && (
-                          <span className="text-amber-400">
-                            • 🔥 {streak}-day streak
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                    {completed ? "✓" : ""}
                   </button>
+                  <div className="flex-1">
+                    <p className="font-medium text-slate-100">
+                      {routine.title}
+                    </p>
+                    <p className="text-[11px] text-slate-400">Daily</p>
+                  </div>
                   <button
-                    onClick={() => deleteRoutineForFuture(routine.id)}
-                    className="text-[11px] text-red-400 underline"
+                    onClick={() => deleteRoutine(routine.id)}
+                    className="text-[11px] text-red-400"
                   >
                     Remove →
                   </button>
                 </div>
 
                 <textarea
-                  value={state.notes}
-                  onChange={autoGrowNotes(routine.id)}
-                  rows={2}
-                  className="w-full whitespace-pre-wrap break-words overflow-hidden resize-none rounded-xl border border-slate-600 bg-slate-950/75 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-emerald-500"
-                  placeholder="Notes or extra effort for this habit today…"
+                  value={log?.notes ?? ""}
+                  onChange={(e) => updateNotes(routine, e.target.value)}
+                  placeholder="Notes or extra effort for this habit today..."
+                  className="mt-3 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 min-h-[56px]"
                 />
               </div>
             );
           })}
-        </div>
-      </section>
+        </section>
+      </main>
     </div>
   );
 }

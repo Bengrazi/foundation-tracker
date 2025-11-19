@@ -8,6 +8,7 @@ const tabs = [
   { href: "/reflect", label: "Reflect" },
   { href: "/goals", label: "Goals" },
   { href: "/chat", label: "AI" },
+  { href: "/settings", label: "Settings" } // 👈 new tab
 ];
 
 export default function BottomNav() {

@@ -1,64 +1,48 @@
-// app/login/page.tsx
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabaseBrowser } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const onSubmit = async (e: FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    setErrorMsg("");
     setLoading(true);
-    const supabase = supabaseBrowser();
 
-    try {
-      if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (error) throw error;
-        // In most setups, Supabase returns a session immediately.
-        // If email confirmation is required, user may need to confirm before next login.
-        if (!data.session) {
-          // fall through to login page; they can log in after confirming email.
-        }
-      }
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-      router.push("/foundation");
-    } catch (err: any) {
-      setError(err?.message ?? "Something went wrong.");
-    } finally {
-      setLoading(false);
+    setLoading(false);
+
+    if (error) {
+      setErrorMsg(error.message || "Unable to sign in.");
+      return;
     }
-  };
+
+    router.push("/foundation");
+  }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="mb-1 text-xl font-semibold text-slate-900">
-          {mode === "login" ? "Sign in to Foundation" : "Create your account"}
-        </h1>
-        <p className="mb-4 text-xs text-slate-600">
-          Your data is private and only used for your personal AI insights.
+    <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
+      <div className="w-full max-w-sm rounded-3xl border border-slate-800 bg-slate-900/95 p-6 shadow-xl shadow-black/40">
+        <h1 className="text-xl font-semibold text-slate-50 mb-1">Foundation</h1>
+        <p className="mb-6 text-xs text-slate-400">
+          Sign in to track your habits, reflections, and goals. Your data stays
+          private.
         </p>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-600">
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-200">
               Email
             </label>
             <input
@@ -66,11 +50,13 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+              placeholder="you@example.com"
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-600">
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-200">
               Password
             </label>
             <input
@@ -78,54 +64,25 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+              placeholder="••••••••"
             />
           </div>
 
-          {error && (
-            <p className="text-xs text-red-500">
-              {error}
+          {errorMsg && (
+            <p className="text-xs text-red-400 bg-red-950/40 border border-red-700/60 rounded-lg px-3 py-2">
+              {errorMsg}
             </p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-emerald-600 py-2 text-sm font-medium text-white disabled:opacity-60"
+            className="mt-2 w-full rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow hover:bg-emerald-400 disabled:opacity-60"
           >
-            {loading
-              ? mode === "login"
-                ? "Signing in..."
-                : "Creating account..."
-              : mode === "login"
-              ? "Sign in"
-              : "Sign up"}
+            {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
-
-        <div className="mt-3 text-center text-[11px] text-slate-500">
-          {mode === "login" ? (
-            <>
-              Don&apos;t have an account?{" "}
-              <button
-                onClick={() => setMode("signup")}
-                className="font-semibold text-emerald-600 underline"
-              >
-                Create one
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{" "}
-              <button
-                onClick={() => setMode("login")}
-                className="font-semibold text-emerald-600 underline"
-              >
-                Sign in
-              </button>
-            </>
-          )}
-        </div>
       </div>
     </div>
   );
