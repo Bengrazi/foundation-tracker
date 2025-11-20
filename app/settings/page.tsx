@@ -184,7 +184,14 @@ export default function SettingsPage() {
         supabase.from("reflections").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("goals").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("daily_intentions").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-        supabase.from("profiles").delete().eq("id", auth.user.id), // profiles uses auth user id as PK
+        // Clear onboarding fields instead of deleting profile
+        supabase.from("profiles").update({
+          priorities: null,
+          life_summary: null,
+          ideology: null,
+          key_truth: null,
+          ai_voice: null
+        }).eq("id", auth.user.id),
         supabase.from("board_members").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
       ]);
 
