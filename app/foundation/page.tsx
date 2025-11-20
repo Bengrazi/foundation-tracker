@@ -120,6 +120,7 @@ function computeStreakForFoundation(
   return streak;
 }
 
+// Calculates gold streak: counts consecutive days where ALL active habits were completed
 function computeGoldStreak(
   foundations: Foundation[],
   logsByDate: LogsByDate,
