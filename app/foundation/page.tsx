@@ -222,12 +222,35 @@ export default function FoundationPage() {
   useEffect(() => {
     applySavedTextSize();
 
-    if (typeof window !== "undefined") {
+    const checkOnboarding = async () => {
+      if (typeof window === "undefined") return;
+
       const done = window.localStorage.getItem(ONBOARDING_KEY);
-      if (!done) {
+      if (done) return;
+
+      // Not done locally? Check DB.
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user) {
+        setShowOnboarding(true);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("priorities, life_summary")
+        .eq("id", auth.user.id)
+        .single();
+
+      if (profile && profile.priorities && profile.life_summary) {
+        // Found existing profile -> mark done locally
+        window.localStorage.setItem(ONBOARDING_KEY, "1");
+      } else {
+        // No profile -> show onboarding
         setShowOnboarding(true);
       }
-    }
+    };
+
+    checkOnboarding();
   }, []);
 
   // Load foundations + logs whenever date changes (and on first load)
@@ -885,84 +908,103 @@ export default function FoundationPage() {
               const completed = log?.completed ?? false;
               const streak = streakByFoundationId[f.id] ?? 0;
 
+              // Check if all active habits are done for the gold border
+              const activeToday = foundations.filter((found) => {
+                if (selectedDate < found.start_date) return false;
+                if (found.end_date && selectedDate > found.end_date) return false;
+                return matchesSchedule(found.schedule_type, selectedDate, found.x_per_week);
+              });
+              const allDone = activeToday.length > 0 && activeToday.every((found) =>
+                logs.some((l) => l.foundation_id === found.id && l.completed)
+              );
+
+              let ringClass = "ring-app-border";
+              if (allDone) ringClass = "ring-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.3)]";
+              else if (completed) ringClass = "ring-green-500";
+
               return (
                 <div
                   key={f.id}
-                  className="mb-3 rounded-2xl bg-app-card p-3 ring-1 ring-app-border"
+                  className={`mb-3 rounded-2xl bg-app-card p-3 ring-1 transition-all duration-300 ${ringClass}`}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  {/* Row 1: Checkbox + Title */}
+                  <div className="flex items-center gap-3 mb-2">
                     <button
                       type="button"
                       onClick={() => handleToggleFoundation(f)}
-                      className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border ${completed
+                      className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border transition-colors ${completed
                         ? "border-app-accent bg-app-accent text-app-accent-text"
                         : "border-app-border bg-app-input text-app-muted"
                         }`}
                     >
                       {completed ? "✓" : ""}
                     </button>
+                    <div className="text-sm font-semibold text-app-main">
+                      {f.title}
+                    </div>
+                  </div>
 
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <div className="text-sm font-semibold text-app-main">
-                            {f.title}
-                          </div>
-                          <div className="text-[11px] text-app-muted">
-                            {f.schedule_type === "daily"
-                              ? "Daily"
-                              : f.schedule_type === "weekdays"
-                                ? "Weekdays"
-                                : f.schedule_type === "weekly"
-                                  ? "Weekly"
-                                  : f.schedule_type === "monthly"
-                                    ? "Monthly"
-                                    : `${f.x_per_week}x per week`}
-                            {streak > 0 && (
-                              <span className="ml-2 text-app-accent-color">
-                                • Streak: {streak}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                  {/* Row 2: Meta | Streak | Arrows | Remove */}
+                  <div className="flex items-center justify-between pl-9 mb-2">
+                    <div className="flex items-center gap-2 text-[11px] text-app-muted">
+                      <span>
+                        {f.schedule_type === "daily"
+                          ? "Daily"
+                          : f.schedule_type === "weekdays"
+                            ? "Weekdays"
+                            : f.schedule_type === "weekly"
+                              ? "Weekly"
+                              : f.schedule_type === "monthly"
+                                ? "Monthly"
+                                : `${f.x_per_week}x per week`}
+                      </span>
+                      {streak > 0 && (
+                        <span className="text-app-accent-color">
+                          • Streak: {streak}
+                        </span>
+                      )}
+                    </div>
 
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleMoveFoundation(f.id, "up")}
-                            className="p-1 text-app-muted hover:text-app-main disabled:opacity-30"
-                            disabled={loading} // simplistic disable
-                          >
-                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleMoveFoundation(f.id, "down")}
-                            className="p-1 text-app-muted hover:text-app-main disabled:opacity-30"
-                            disabled={loading}
-                          >
-                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleDeleteFoundationFromTodayForward(f)}
-                            disabled={deletingId === f.id}
-                            className="ml-1 text-[10px] text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-900/30 bg-red-950/20"
-                          >
-                            {deletingId === f.id ? "..." : "Remove"}
-                          </button>
-                        </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 mr-2">
+                        <button
+                          onClick={() => handleMoveFoundation(f.id, "up")}
+                          className="text-[10px] text-app-muted hover:text-app-accent-color px-1"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          onClick={() => handleMoveFoundation(f.id, "down")}
+                          className="text-[10px] text-app-muted hover:text-app-accent-color px-1"
+                        >
+                          ▼
+                        </button>
                       </div>
 
-                      <textarea
-                        value={log?.notes ?? ""}
-                        onChange={(e) => handleNotesChange(f, e.target.value)}
-                        placeholder="Notes or extra effort for this habit today..."
-                        rows={2}
-                        className="mt-2 w-full resize-none rounded-xl border border-app-border bg-app-input px-3 py-1.5 text-xs text-app-main outline-none focus:border-app-accent"
-                      />
+                      <div className="relative">
+                        {deletingId === f.id ? (
+                          <span className="text-[10px] text-red-400 animate-pulse">...</span>
+                        ) : (
+                          <button
+                            onClick={() => handleDeleteFoundationFromTodayForward(f)}
+                            className="text-[10px] text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-900/30 bg-red-950/20"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Row 3: Notes */}
+                  <div className="pl-9">
+                    <textarea
+                      value={log?.notes ?? ""}
+                      onChange={(e) => handleNotesChange(f, e.target.value)}
+                      placeholder="Notes or extra effort..."
+                      rows={1}
+                      className="w-full resize-none rounded-xl border border-app-border bg-app-input px-3 py-1.5 text-xs text-app-main outline-none focus:border-app-accent"
+                    />
                   </div>
                 </div>
               );
@@ -1002,8 +1044,7 @@ export default function FoundationPage() {
                 Welcome to Foundation
               </h2>
               <p className="mb-6 text-sm text-app-muted">
-                Let&apos;s set up your AI coach. These answers will help generate your
-                goals and daily intention.
+                These answers will help set up your personalized Foundation AI coach.
               </p>
 
               <div className="space-y-4">
@@ -1060,11 +1101,7 @@ export default function FoundationPage() {
                 {savingOnboarding ? "Generating Plan..." : "Create My Foundation"}
               </button>
 
-              <p className="mt-3 text-[10px] text-app-muted">
-                Keeps your login. After reset (from Settings) you’ll see these
-                questions again so goals and daily intention can be recreated by
-                AI — but you won’t be logged out.
-              </p>
+
             </div>
           </div>
         )}

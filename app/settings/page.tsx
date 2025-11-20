@@ -55,9 +55,17 @@ export default function SettingsPage() {
     applySavedTextSize();
     applySavedTheme();
 
-    const savedCoach = localStorage.getItem("foundation_ai_coach_enabled");
-    if (savedCoach !== null) {
-      setAiCoachEnabled(savedCoach === "true");
+    if (typeof window !== "undefined") {
+      const savedCoach = localStorage.getItem("foundation_ai_coach_enabled");
+      if (savedCoach !== null) {
+        setAiCoachEnabled(savedCoach === "true");
+      }
+
+      const savedTextSize = localStorage.getItem("foundation_ui_text_size_v1") as TextSize | null;
+      if (savedTextSize) setTextSizeState(savedTextSize);
+
+      const savedTheme = localStorage.getItem("foundation_theme") as Theme | null;
+      if (savedTheme) setThemeState(savedTheme);
     }
   }, []);
 
@@ -232,7 +240,10 @@ export default function SettingsPage() {
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setTheme(opt.value)}
+                  onClick={() => {
+                    setTheme(opt.value);
+                    setThemeState(opt.value);
+                  }}
                   className={
                     "flex-1 rounded-full border px-3 py-1.5 text-xs transition " +
                     (active
@@ -264,7 +275,10 @@ export default function SettingsPage() {
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setTextSize(opt.value)}
+                  onClick={() => {
+                    setTextSize(opt.value);
+                    setTextSizeState(opt.value);
+                  }}
                   className={
                     "flex-1 rounded-full border px-3 py-1.5 text-xs transition " +
                     (active

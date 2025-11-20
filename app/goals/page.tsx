@@ -48,7 +48,6 @@ export default function GoalsPage() {
         .from("goals")
         .select("*")
         .eq("user_id", user.id)
-        .eq("user_id", user.id)
         .order("order_index", { ascending: true });
 
       if (!error && data) {
