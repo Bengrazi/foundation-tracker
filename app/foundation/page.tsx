@@ -131,7 +131,6 @@ function computeGoldStreak(
 
   let streak = 0;
   let current = parseISO(selectedDate);
-  const today = format(new Date(), "yyyy-MM-dd");
   let isFirstDay = true;
 
   for (let i = 0; i < maxLookbackDays; i++) {
@@ -158,14 +157,15 @@ function computeGoldStreak(
       current = addDays(current, -1);
       isFirstDay = false;
     } else {
-      // If this is today and it's incomplete, skip it and continue counting from yesterday
-      // This prevents breaking the streak just because today isn't done yet
-      if (isFirstDay && key === today) {
+      // If this is the first day we're checking (selectedDate) and it's incomplete,
+      // skip it and continue counting from the previous day
+      // This shows the streak up to yesterday when today isn't done yet
+      if (isFirstDay) {
         current = addDays(current, -1);
         isFirstDay = false;
         continue;
       }
-      // Break on any other incomplete day (actual missed day)
+      // Break on any other incomplete day (actual missed day in the past)
       break;
     }
   }
@@ -237,24 +237,32 @@ export default function FoundationPage() {
     const checkOnboarding = async () => {
       if (typeof window === "undefined") return;
 
+      console.log("[Onboarding] Checking onboarding status...");
+
       // Always check DB to verify profile exists (handles reset case where localStorage might be cached)
       const { data: auth } = await supabase.auth.getUser();
       if (!auth?.user) {
+        console.log("[Onboarding] No user found, showing onboarding");
         setShowOnboarding(true);
         return;
       }
 
+      console.log("[Onboarding] User found, checking profile in DB");
       const { data: profile } = await supabase
         .from("profiles")
         .select("priorities, life_summary")
         .eq("id", auth.user.id)
         .single();
 
+      console.log("[Onboarding] Profile data:", profile);
+
       if (profile && profile.priorities && profile.life_summary) {
         // Found existing profile -> mark done locally
+        console.log("[Onboarding] Profile exists with data, skipping onboarding");
         window.localStorage.setItem(ONBOARDING_KEY, "1");
       } else {
         // No profile in DB -> clear any stale localStorage and show onboarding
+        console.log("[Onboarding] No profile or missing data, showing onboarding");
         window.localStorage.removeItem(ONBOARDING_KEY);
         setShowOnboarding(true);
       }
