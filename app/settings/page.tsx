@@ -184,7 +184,7 @@ export default function SettingsPage() {
         supabase.from("reflections").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("goals").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("daily_intentions").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-        supabase.from("profiles").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+        supabase.from("profiles").delete().eq("id", auth.user.id), // profiles uses auth user id as PK
         supabase.from("board_members").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
       ]);
 
