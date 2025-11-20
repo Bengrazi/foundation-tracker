@@ -162,6 +162,14 @@ export default function GoalsPage() {
     }
   });
 
+  // Sort each horizon by order_index, then separate completed
+  for (const h of Object.keys(groups) as Horizon[]) {
+    const sorted = groups[h].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+    const active = sorted.filter((g) => g.status !== "achieved");
+    const done = sorted.filter((g) => g.status === "achieved");
+    groups[h] = [...active, ...done];
+  }
+
   function GoalCard(goal: Goal) {
     return (
       <div

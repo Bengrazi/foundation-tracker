@@ -306,7 +306,7 @@ export default function SettingsPage() {
                 onChange={(e) => handleAiCoachToggle(e.target.checked)}
                 className="peer sr-only"
               />
-              <div className="peer h-5 w-9 rounded-full bg-app-input ring-1 ring-app-border after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-app-accent peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none"></div>
+              <div className={`peer h-5 w-9 rounded-full ${aiCoachEnabled ? 'bg-green-500/30 ring-green-500/50' : 'bg-red-400/30 ring-red-400/50'} ring-1 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-green-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none`}></div>
             </label>
           </div>
           <p className="text-xs text-app-muted">
