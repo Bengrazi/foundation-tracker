@@ -154,20 +154,20 @@ export default function GoalsPage() {
     return (
       <div
         key={goal.id}
-        className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4 mb-3 text-xs text-slate-200"
+        className="rounded-2xl border border-app-border bg-app-card p-4 mb-3 text-xs text-app-main"
       >
         <div className="flex justify-between gap-3">
-          <p className="text-slate-300 font-medium break-words">{goal.title}</p>
+          <p className="text-app-main font-medium break-words">{goal.title}</p>
           <div className="flex items-center gap-1">
             <button
               onClick={() => moveGoal(goal, "up")}
-              className="text-[10px] text-slate-500 hover:text-emerald-400 px-1"
+              className="text-[10px] text-app-muted hover:text-app-accent-color px-1"
             >
               ▲
             </button>
             <button
               onClick={() => moveGoal(goal, "down")}
-              className="text-[10px] text-slate-500 hover:text-emerald-400 px-1"
+              className="text-[10px] text-app-muted hover:text-app-accent-color px-1"
             >
               ▼
             </button>
@@ -175,7 +175,7 @@ export default function GoalsPage() {
         </div>
 
         <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-slate-400 text-[11px]">
+          <span className="text-app-muted text-[11px]">
             {format(parseISO(goal.target_date), "yyyy-MM-dd")} (est.)
           </span>
 
@@ -190,7 +190,7 @@ export default function GoalsPage() {
                 )
               )
             }
-            className="rounded bg-slate-800 border border-slate-600 px-2 py-1 text-[10px]"
+            className="rounded bg-app-input border border-app-border px-2 py-1 text-[10px] text-app-main"
           >
             <option value="not_started">Not started</option>
             <option value="in_progress">In progress</option>
@@ -209,19 +209,19 @@ export default function GoalsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
+    <div className="min-h-screen bg-app-main text-app-main transition-colors duration-300">
       <AuthGuardHeader />
 
       <main className="mx-auto max-w-md px-4 pb-28 pt-4">
         <header className="mb-5 flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold">Goals</h1>
-            <label className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
+            <h1 className="text-lg font-semibold text-app-main">Goals</h1>
+            <label className="mt-1 flex items-center gap-2 text-[11px] text-app-muted">
               <input
                 type="checkbox"
                 checked={hideCompleted}
                 onChange={(e) => setHideCompleted(e.target.checked)}
-                className="h-3 w-3 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400"
+                className="h-3 w-3 rounded border-app-border bg-app-input text-app-accent focus:ring-app-accent"
               />
               Hide completed
             </label>
@@ -231,13 +231,13 @@ export default function GoalsPage() {
             <button
               onClick={handleSaveAll}
               disabled={loading}
-              className="rounded-full bg-emerald-500 px-4 py-1.5 text-xs text-slate-950 shadow font-semibold disabled:opacity-60"
+              className="rounded-full bg-app-accent px-4 py-1.5 text-xs text-app-accent-text shadow font-semibold disabled:opacity-60"
             >
               Save goals
             </button>
             <button
               onClick={() => setShowNewGoal((v) => !v)}
-              className="rounded-full border border-slate-600 bg-slate-900 px-3 py-1 text-[11px] text-slate-200 hover:border-emerald-400"
+              className="rounded-full border border-app-border bg-app-card px-3 py-1 text-[11px] text-app-main hover:border-app-accent"
             >
               {showNewGoal ? "Close new goal" : "New goal"}
             </button>
@@ -245,14 +245,14 @@ export default function GoalsPage() {
         </header>
 
         {showNewGoal && (
-          <section className="mb-6 rounded-2xl border border-slate-700 bg-slate-900/80 p-4 text-xs">
-            <h2 className="text-slate-300 font-semibold mb-2">New goal</h2>
+          <section className="mb-6 rounded-2xl border border-app-border bg-app-card p-4 text-xs">
+            <h2 className="text-app-main font-semibold mb-2">New goal</h2>
 
-            <label className="text-[11px] text-slate-400">Horizon</label>
+            <label className="text-[11px] text-app-muted">Horizon</label>
             <select
               value={newHorizon}
               onChange={(e) => setNewHorizon(e.target.value as Horizon)}
-              className="mt-1 block w-full rounded bg-slate-800 border border-slate-600 px-2 py-1"
+              className="mt-1 block w-full rounded bg-app-input border border-app-border px-2 py-1 text-app-main"
             >
               <option value="3y">3 years</option>
               <option value="1y">1 year</option>
@@ -260,28 +260,28 @@ export default function GoalsPage() {
               <option value="1m">1 month</option>
             </select>
 
-            <label className="mt-3 text-[11px] text-slate-400">Goal title</label>
+            <label className="mt-3 text-[11px] text-app-muted">Goal title</label>
             <input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              className="mt-1 block w-full rounded bg-slate-800 border border-slate-600 px-2 py-1 text-slate-100"
+              className="mt-1 block w-full rounded bg-app-input border border-app-border px-2 py-1 text-app-main"
             />
 
-            <label className="mt-3 text-[11px] text-slate-400">
+            <label className="mt-3 text-[11px] text-app-muted">
               Estimated finish date
             </label>
             <input
               type="date"
               value={newDate}
               onChange={(e) => setNewDate(e.target.value)}
-              className="mt-1 block w-full rounded bg-slate-800 border border-slate-600 px-2 py-1 text-slate-100"
+              className="mt-1 block w-full rounded bg-app-input border border-app-border px-2 py-1 text-app-main"
             />
 
-            <label className="mt-3 text-[11px] text-slate-400">Status</label>
+            <label className="mt-3 text-[11px] text-app-muted">Status</label>
             <select
               value={newStatus}
               onChange={(e) => setNewStatus(e.target.value as GoalStatus)}
-              className="mt-1 block w-full rounded bg-slate-800 border border-slate-600 px-2 py-1"
+              className="mt-1 block w-full rounded bg-app-input border border-app-border px-2 py-1 text-app-main"
             >
               <option value="not_started">Not started</option>
               <option value="in_progress">In progress</option>
@@ -290,7 +290,7 @@ export default function GoalsPage() {
 
             <button
               onClick={createGoal}
-              className="mt-4 w-full rounded-full bg-emerald-500 py-1.5 text-xs text-slate-950 font-semibold"
+              className="mt-4 w-full rounded-full bg-app-accent py-1.5 text-xs text-app-accent-text font-semibold"
             >
               Add goal
             </button>
@@ -298,18 +298,18 @@ export default function GoalsPage() {
         )}
 
         <section>
-          <h2 className="text-xs text-slate-400 uppercase mb-1">3 years</h2>
+          <h2 className="text-xs text-app-muted uppercase mb-1">3 years</h2>
           {groups["3y"].map(GoalCard)}
 
-          <h2 className="text-xs text-slate-400 uppercase mt-5 mb-1">1 year</h2>
+          <h2 className="text-xs text-app-muted uppercase mt-5 mb-1">1 year</h2>
           {groups["1y"].map(GoalCard)}
 
-          <h2 className="text-xs text-slate-400 uppercase mt-5 mb-1">
+          <h2 className="text-xs text-app-muted uppercase mt-5 mb-1">
             6 months
           </h2>
           {groups["6m"].map(GoalCard)}
 
-          <h2 className="text-xs text-slate-400 uppercase mt-5 mb-1">
+          <h2 className="text-xs text-app-muted uppercase mt-5 mb-1">
             1 month
           </h2>
           {groups["1m"].map(GoalCard)}

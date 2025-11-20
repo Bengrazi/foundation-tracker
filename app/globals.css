@@ -4,13 +4,149 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Global dark background & text – using plain CSS, no @apply */
+@layer base {
+  :root {
+    /* Default Dark (Slate) */
+    --bg-main: #020617;
+    /* slate-950 */
+    --bg-card: #0f172a;
+    /* slate-900 */
+    --bg-card-hover: #1e293b;
+    /* slate-800 */
+    --bg-input: rgba(15, 23, 42, 0.7);
+    /* slate-950/70ish */
+    --text-main: #f8fafc;
+    /* slate-50 */
+    --text-muted: #94a3b8;
+    /* slate-400 */
+    --border: #1e293b;
+    /* slate-800 */
+    --accent: #10b981;
+    /* emerald-500 */
+    --accent-hover: #34d399;
+    /* emerald-400 */
+    --accent-text: #020617;
+    /* slate-950 */
+    --danger: #f87171;
+    /* red-400 */
+    --danger-bg: rgba(69, 10, 10, 0.2);
+    /* red-950/20 */
+  }
+
+  [data-theme="light"] {
+    /* Light (Clean) */
+    --bg-main: #ffffff;
+    --bg-card: #f1f5f9;
+    /* slate-100 */
+    --bg-card-hover: #e2e8f0;
+    /* slate-200 */
+    --bg-input: #ffffff;
+    --text-main: #0f172a;
+    /* slate-900 */
+    --text-muted: #64748b;
+    /* slate-500 */
+    --border: #cbd5e1;
+    /* slate-300 */
+    --accent: #0f172a;
+    /* slate-900 */
+    --accent-hover: #334155;
+    /* slate-700 */
+    --accent-text: #ffffff;
+    --danger: #ef4444;
+    /* red-500 */
+    --danger-bg: #fee2e2;
+    /* red-100 */
+  }
+
+  [data-theme="sunrise"] {
+    /* Sunrise (Warm/Bliss) */
+    --bg-main: #fff7ed;
+    /* orange-50 */
+    --bg-card: #ffedd5;
+    /* orange-100 */
+    --bg-card-hover: #fed7aa;
+    /* orange-200 */
+    --bg-input: #ffffff;
+    --text-main: #431407;
+    /* orange-950 */
+    --text-muted: #9a3412;
+    /* orange-700 */
+    --border: #fdba74;
+    /* orange-300 */
+    --accent: #f97316;
+    /* orange-500 */
+    --accent-hover: #fb923c;
+    /* orange-400 */
+    --accent-text: #ffffff;
+    --danger: #ef4444;
+    --danger-bg: #fee2e2;
+  }
+}
+
 html,
 body {
-  background-color: #020617;
-  /* roughly Tailwind bg-slate-950 */
-  color: #f9fafb;
-  /* roughly text-slate-50 */
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Utility classes mapping to variables */
+@layer utilities {
+  .bg-app-main {
+    background-color: var(--bg-main);
+  }
+
+  .bg-app-card {
+    background-color: var(--bg-card);
+  }
+
+  .bg-app-card-hover {
+    background-color: var(--bg-card-hover);
+  }
+
+  .bg-app-input {
+    background-color: var(--bg-input);
+  }
+
+  .text-app-main {
+    color: var(--text-main);
+  }
+
+  .text-app-muted {
+    color: var(--text-muted);
+  }
+
+  .border-app-border {
+    border-color: var(--border);
+  }
+
+  .bg-app-accent {
+    background-color: var(--accent);
+  }
+
+  .bg-app-accent-hover {
+    background-color: var(--accent-hover);
+  }
+
+  .text-app-accent-text {
+    color: var(--accent-text);
+  }
+
+  .text-app-accent-color {
+    color: var(--accent);
+  }
+
+  .text-app-accent-hover {
+    color: var(--accent-hover);
+  }
+
+  .hover-text-app-accent:hover {
+    color: var(--accent-hover);
+  }
+
+  .hover-bg-app-accent:hover {
+    background-color: var(--accent-hover);
+  }
 }
 
 /* Smooth, rounded scrollbars (where they appear) */
@@ -19,23 +155,23 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #020617;
+  background: var(--bg-main);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--bg-card-hover);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #22c55e;
+  background: var(--accent);
 }
 
 /* Firefox */
 textarea {
   scrollbar-width: thin;
-  scrollbar-color: #1f2933 #020617;
+  scrollbar-color: var(--bg-card-hover) var(--bg-main);
 }
 
 /* Global font size controlled by data-text-size on <html> */

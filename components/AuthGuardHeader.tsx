@@ -31,12 +31,12 @@ export function AuthGuardHeader() {
 
   return (
     <header className="mx-auto flex max-w-md items-center justify-between px-4 pt-4">
-      <span className="text-xs font-semibold tracking-wide text-slate-400 uppercase">
+      <span className="text-xs font-semibold tracking-wide text-app-muted uppercase">
         Foundation
       </span>
       <button
         onClick={logout}
-        className="text-[11px] text-slate-400 hover:text-red-300"
+        className="text-[11px] text-app-muted hover:text-red-300"
       >
         Sign out
       </button>

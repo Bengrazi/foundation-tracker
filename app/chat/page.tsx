@@ -79,19 +79,19 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
+    <div className="min-h-screen bg-app-main text-app-main transition-colors duration-300">
       <AuthGuardHeader />
 
       <main className="mx-auto flex min-h-[calc(100vh-80px)] max-w-md flex-col px-4 pb-24 pt-4">
-        <h1 className="mb-3 text-lg font-semibold">AI Coach</h1>
-        <p className="mb-4 text-xs text-slate-400">
+        <h1 className="mb-3 text-lg font-semibold text-app-main">AI Coach</h1>
+        <p className="mb-4 text-xs text-app-muted">
           Ask about your habits, reflections, and goals. Replies stay concise and
           practical.
         </p>
 
-        <div className="flex-1 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/70 p-3 text-xs">
+        <div className="flex-1 overflow-y-auto rounded-2xl border border-app-border bg-app-card p-3 text-xs">
           {messages.length === 0 && (
-            <p className="text-slate-500 text-[11px]">
+            <p className="text-app-muted text-[11px]">
               Try: “How have my habits been this week?” or “Give me one suggestion
               to get closer to my 3-year goal.”
             </p>
@@ -105,8 +105,8 @@ export default function ChatPage() {
             >
               <div
                 className={`max-w-[80%] rounded-2xl px-3 py-2 ${m.role === "user"
-                    ? "bg-emerald-500 text-slate-950"
-                    : "bg-slate-800 text-slate-100"
+                  ? "bg-app-accent text-app-accent-text"
+                  : "bg-app-input text-app-main"
                   } text-[11px] whitespace-pre-wrap`}
               >
                 {m.content}
@@ -115,7 +115,7 @@ export default function ChatPage() {
           ))}
 
           {loading && (
-            <p className="mt-2 text-[11px] text-slate-500">Thinking…</p>
+            <p className="mt-2 text-[11px] text-app-muted">Thinking…</p>
           )}
 
           <div ref={bottomRef} />
@@ -123,18 +123,18 @@ export default function ChatPage() {
 
         <form
           onSubmit={sendMessage}
-          className="mt-3 flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900 px-3 py-1.5"
+          className="mt-3 flex items-center gap-2 rounded-full border border-app-border bg-app-card px-3 py-1.5"
         >
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask Foundation…"
-            className="flex-1 bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+            className="flex-1 bg-transparent text-xs text-app-main placeholder:text-app-muted focus:outline-none"
           />
           <button
             type="submit"
             disabled={loading}
-            className="rounded-full bg-emerald-500 px-3 py-1 text-[11px] font-semibold text-slate-950 disabled:opacity-60"
+            className="rounded-full bg-app-accent px-3 py-1 text-[11px] font-semibold text-app-accent-text disabled:opacity-60"
           >
             Send
           </button>

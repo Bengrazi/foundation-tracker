@@ -29,12 +29,30 @@ export default function RootLayout({
       <body
         className={
           inter.className +
-          " bg-slate-950 text-slate-100 antialiased selection:bg-emerald-500/40"
+          " bg-app-main text-app-main antialiased selection:bg-app-accent/40 transition-colors duration-300"
         }
       >
-        <div className="flex min-h-screen justify-center bg-slate-950">
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var saved = localStorage.getItem('foundation_theme');
+                  if (saved) {
+                    document.documentElement.setAttribute('data-theme', saved);
+                  }
+                  var savedSize = localStorage.getItem('foundation_text_size');
+                  if (savedSize) {
+                    document.documentElement.setAttribute('data-text-size', savedSize);
+                  }
+                } catch (e) {}
+              })()
+            `,
+          }}
+        />
+        <div className="flex min-h-screen justify-center bg-app-main">
           <div className="flex w-full max-w-md flex-col pb-16">
-            <main className="flex-1 bg-slate-950 px-4 pt-4">{children}</main>
+            <main className="flex-1 bg-app-main px-4 pt-4">{children}</main>
             <BottomNav />
           </div>
         </div>

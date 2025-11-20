@@ -582,7 +582,9 @@ export default function FoundationPage() {
     const updated = data as Foundation;
 
     setFoundations((prev) =>
-      prev.map((f) => (f.id === updated.id ? updated : f))
+      prev
+        .map((f) => (f.id === updated.id ? updated : f))
+        .filter((f) => !f.end_date || f.end_date >= selectedDate)
     );
   };
 
@@ -685,51 +687,49 @@ export default function FoundationPage() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-20">
+    <div className="min-h-screen bg-app-main text-app-main pb-20 transition-colors duration-300">
       <AuthGuardHeader />
 
       <main className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-24 pt-2">
         {/* Date header */}
         <section className="mt-2 flex items-center justify-between">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-app-muted">
               Today
             </div>
-            <div className="text-xl font-semibold text-slate-50">
+            <div className="text-xl font-semibold text-app-main">
               {format(parseISO(selectedDate), "EEEE, MMM d")}
             </div>
-            <div className="text-xs text-slate-400">
+            <div className="text-xs text-app-muted">
               {habitsDoneToday}/{foundations.length} habits today
             </div>
           </div>
 
           <div className="text-right">
-            <label className="block text-[11px] uppercase tracking-wide text-slate-400">
+            <label className="block text-[11px] uppercase tracking-wide text-app-muted">
               Date
             </label>
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="mt-1 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-100 outline-none focus:border-emerald-400"
+              className="mt-1 rounded-full border border-app-border bg-app-card px-3 py-1 text-xs text-app-main outline-none focus:border-app-accent"
             />
-            <div className="mt-1 text-[11px] text-amber-300">
+            <div className="mt-1 text-[11px] text-app-accent-color font-medium">
               Gold streak: {goldStreak} {goldStreak === 1 ? "day" : "days"}
             </div>
           </div>
         </section>
 
-
-
         {/* Foundations list */}
         <section>
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold tracking-wide text-slate-300 uppercase">
+            <h2 className="text-xs font-semibold tracking-wide text-app-muted uppercase">
               Daily habits
             </h2>
             <button
               onClick={() => setShowNewHabitForm(!showNewHabitForm)}
-              className="text-[11px] text-emerald-300 hover:text-emerald-200"
+              className="text-[11px] text-app-accent-color hover:text-app-accent-hover"
             >
               {showNewHabitForm ? "Cancel" : "+ Add"}
             </button>
@@ -737,14 +737,14 @@ export default function FoundationPage() {
 
           {/* New foundation inline editor */}
           {showNewHabitForm && (
-            <div className="mb-3 rounded-2xl bg-slate-900/70 p-3 ring-1 ring-slate-800">
+            <div className="mb-3 rounded-2xl bg-app-card p-3 ring-1 ring-app-border">
               <input
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder="New habit title…"
-                className="mb-2 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-1.5 text-xs text-slate-100 outline-none focus:border-emerald-400"
+                className="mb-2 w-full rounded-lg border border-app-border bg-app-input px-3 py-1.5 text-xs text-app-main outline-none focus:border-app-accent"
               />
-              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-300">
+              <div className="flex items-center justify-between gap-2 text-[11px] text-app-muted">
                 <div className="flex flex-wrap gap-1">
                   {(["daily", "weekdays", "weekly", "monthly", "xPerWeek"] as ScheduleType[]).map(
                     (opt) => (
@@ -753,8 +753,8 @@ export default function FoundationPage() {
                         type="button"
                         onClick={() => setNewSchedule(opt)}
                         className={`rounded-full px-2 py-0.5 ${newSchedule === opt
-                          ? "bg-emerald-500 text-slate-950"
-                          : "bg-slate-800 text-slate-300"
+                          ? "bg-app-accent text-app-accent-text"
+                          : "bg-app-card-hover text-app-muted"
                           }`}
                       >
                         {opt === "xPerWeek" ? "x/week" : opt}
@@ -774,9 +774,9 @@ export default function FoundationPage() {
                       onChange={(e) =>
                         setNewXPerWeek(Number(e.target.value || 3))
                       }
-                      className="h-6 w-10 rounded border border-slate-700 bg-slate-950 px-1 text-xs text-slate-100 outline-none"
+                      className="h-6 w-10 rounded border border-app-border bg-app-input px-1 text-xs text-app-main outline-none"
                     />
-                    <span className="text-slate-400">per week</span>
+                    <span className="text-app-muted">per week</span>
                   </div>
                 )}
               </div>
@@ -784,7 +784,7 @@ export default function FoundationPage() {
               <button
                 onClick={handleCreateFoundation}
                 disabled={creatingHabit}
-                className="mt-3 w-full rounded-full bg-emerald-500 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-60"
+                className="mt-3 w-full rounded-full bg-app-accent py-1.5 text-xs font-semibold text-app-accent-text disabled:opacity-60"
               >
                 {creatingHabit ? "Saving..." : "Save"}
               </button>
@@ -792,7 +792,7 @@ export default function FoundationPage() {
           )}
 
           {loading && (
-            <div className="py-6 text-center text-xs text-slate-400">
+            <div className="py-6 text-center text-xs text-app-muted">
               Loading your foundations…
             </div>
           )}
@@ -807,15 +807,15 @@ export default function FoundationPage() {
               return (
                 <div
                   key={f.id}
-                  className="mb-3 rounded-2xl bg-slate-900/80 p-3 ring-1 ring-slate-800"
+                  className="mb-3 rounded-2xl bg-app-card p-3 ring-1 ring-app-border"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <button
                       type="button"
                       onClick={() => handleToggleFoundation(f)}
                       className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border ${completed
-                        ? "border-emerald-400 bg-emerald-500 text-slate-950"
-                        : "border-slate-600 bg-slate-950 text-slate-400"
+                        ? "border-app-accent bg-app-accent text-app-accent-text"
+                        : "border-app-border bg-app-input text-app-muted"
                         }`}
                     >
                       {completed ? "✓" : ""}
@@ -824,10 +824,10 @@ export default function FoundationPage() {
                     <div className="flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <div>
-                          <div className="text-sm font-semibold text-slate-50">
+                          <div className="text-sm font-semibold text-app-main">
                             {f.title}
                           </div>
-                          <div className="text-[11px] text-slate-400">
+                          <div className="text-[11px] text-app-muted">
                             {f.schedule_type === "daily"
                               ? "Daily"
                               : f.schedule_type === "weekdays"
@@ -838,7 +838,7 @@ export default function FoundationPage() {
                                     ? "Monthly"
                                     : `${f.x_per_week}x per week`}
                             {streak > 0 && (
-                              <span className="ml-2 text-emerald-300">
+                              <span className="ml-2 text-app-accent-color">
                                 • Streak: {streak}
                               </span>
                             )}
@@ -859,7 +859,7 @@ export default function FoundationPage() {
                         onChange={(e) => handleNotesChange(f, e.target.value)}
                         placeholder="Notes or extra effort for this habit today..."
                         rows={2}
-                        className="mt-2 w-full resize-none rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-1.5 text-xs text-slate-100 outline-none focus:border-emerald-400"
+                        className="mt-2 w-full resize-none rounded-xl border border-app-border bg-app-input px-3 py-1.5 text-xs text-app-main outline-none focus:border-app-accent"
                       />
                     </div>
                   </div>
@@ -869,127 +869,105 @@ export default function FoundationPage() {
         </section>
 
         {/* Celebration Modal */}
-        {
-          showCelebration && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-              <div className="w-full max-w-sm rounded-3xl border border-emerald-500/50 bg-slate-900 p-6 text-center shadow-2xl shadow-emerald-500/20">
-                <div className="mb-4 text-4xl">🎉</div>
-                <h3 className="mb-2 text-xl font-bold text-emerald-400">
-                  Congratulations!
-                </h3>
-                <div className="min-h-[60px] text-sm text-slate-200">
-                  {celebrationLoading ? (
-                    <span className="animate-pulse">Generating your praise...</span>
-                  ) : (
-                    celebrationMessage
-                  )}
-                </div>
-                <button
-                  onClick={() => setShowCelebration(false)}
-                  className="mt-6 w-full rounded-full bg-emerald-500 py-2 font-bold text-slate-950 hover:bg-emerald-400"
-                >
-                  Let's go!
-                </button>
+        {showCelebration && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-3xl bg-app-card p-6 text-center ring-1 ring-app-border shadow-2xl">
+              <div className="mb-4 text-4xl">🎉</div>
+              <h3 className="mb-2 text-xl font-bold text-app-main">
+                Congratulations!
+              </h3>
+              <div className="mb-6 text-sm text-app-muted min-h-[60px] flex items-center justify-center">
+                {celebrationLoading ? (
+                  <span className="animate-pulse">Asking your AI coach...</span>
+                ) : (
+                  celebrationMessage
+                )}
               </div>
+              <button
+                onClick={() => setShowCelebration(false)}
+                className="w-full rounded-full bg-app-accent py-2 text-sm font-semibold text-app-accent-text hover:bg-app-accent-hover"
+              >
+                Keep it up!
+              </button>
             </div>
-          )
-        }
-      </main >
+          </div>
+        )}
 
-      {/* ---------- Onboarding modal ---------- */}
-      {
-        showOnboarding && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4">
-            <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-slate-900 p-5 ring-1 ring-slate-700">
-              <h2 className="mb-1 text-sm font-semibold text-slate-50">
+        {/* Onboarding Modal */}
+        {showOnboarding && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-3xl bg-app-card p-6 ring-1 ring-app-border shadow-2xl max-h-[90vh] overflow-y-auto">
+              <h2 className="mb-2 text-xl font-bold text-app-main">
                 Welcome to Foundation
               </h2>
-              <p className="mb-4 text-xs text-slate-300">
-                This quick primer is private and only used to personalize your AI
-                intentions, goals, and insights. It’s a one-time thing.
+              <p className="mb-6 text-sm text-app-muted">
+                Let&apos;s set up your AI coach. These answers will help generate your
+                goals and daily intention.
               </p>
 
-              <div className="space-y-4 text-xs text-slate-200">
+              <div className="space-y-4">
                 <div>
-                  <p className="mb-1 font-semibold">
-                    1. Rank from most to least important for you
-                  </p>
-                  <p className="mb-2 text-[11px] text-slate-400">
-                    Use the words{" "}
-                    <span className="font-semibold">
-                      Financial, Family, Friends (Community), Personal Growth.
-                    </span>
-                  </p>
+                  <label className="mb-1 block text-xs font-medium text-app-muted">
+                    What are your top 3 priorities right now?
+                  </label>
                   <textarea
-                    rows={2}
                     value={onboarding.priorities}
                     onChange={(e) =>
                       handleOnboardingChange("priorities", e.target.value)
                     }
-                    placeholder="Example: Personal Growth, Family, Financial, Friends (Community)"
-                    className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-400"
+                    placeholder="e.g. Health, Building my startup, Family connection..."
+                    className="w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-main outline-none focus:border-app-accent"
+                    rows={2}
                   />
                 </div>
 
                 <div>
-                  <p className="mb-1 font-semibold">
-                    2. Briefly describe your life today and where you’d like to be
-                    in 10 years
-                  </p>
+                  <label className="mb-1 block text-xs font-medium text-app-muted">
+                    What is your 10-year vision or life summary?
+                  </label>
                   <textarea
-                    rows={3}
                     value={onboarding.lifeSummary}
                     onChange={(e) =>
                       handleOnboardingChange("lifeSummary", e.target.value)
                     }
-                    placeholder="Finances, family, community, personal growth now – and your ideal 10-year future."
-                    className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-400"
+                    placeholder="e.g. I want to be a leader in tech, living on a farm..."
+                    className="w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-main outline-none focus:border-app-accent"
+                    rows={3}
                   />
                 </div>
 
                 <div>
-                  <p className="mb-1 font-semibold">
-                    3. How would you describe your ideology or worldview?
-                  </p>
-                  <textarea
-                    rows={2}
+                  <label className="mb-1 block text-xs font-medium text-app-muted">
+                    Any specific ideology, philosophy, or religion? (Optional)
+                  </label>
+                  <input
                     value={onboarding.ideology}
                     onChange={(e) =>
                       handleOnboardingChange("ideology", e.target.value)
                     }
-                    placeholder="E.g. Christian, stoic, freedom lover, capitalist, other…"
-                    className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none focus:border-emerald-400"
+                    placeholder="e.g. Stoicism, Christianity, Buddhism..."
+                    className="w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-main outline-none focus:border-app-accent"
                   />
                 </div>
               </div>
 
-              <div className="mt-5 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowOnboarding(false)}
-                  className="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
-                >
-                  Skip for now
-                </button>
-                <button
-                  type="button"
-                  onClick={handleOnboardingSubmit}
-                  disabled={savingOnboarding}
-                  className="rounded-full bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
-                >
-                  {savingOnboarding ? "Saving…" : "Save & continue"}
-                </button>
-              </div>
+              <button
+                onClick={handleOnboardingSubmit}
+                disabled={savingOnboarding}
+                className="mt-6 w-full rounded-full bg-app-accent py-2.5 text-sm font-semibold text-app-accent-text hover:bg-app-accent-hover disabled:opacity-60"
+              >
+                {savingOnboarding ? "Generating Plan..." : "Create My Foundation"}
+              </button>
 
-              <p className="mt-3 text-[10px] text-slate-500">
+              <p className="mt-3 text-[10px] text-app-muted">
                 Keeps your login. After reset (from Settings) you’ll see these
                 questions again so goals and daily intention can be recreated by
                 AI — but you won’t be logged out.
               </p>
             </div>
           </div>
-        )
-      }
-    </div >
+        )}
+      </main>
+    </div>
   );
 }

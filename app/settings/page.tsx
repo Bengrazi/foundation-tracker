@@ -39,24 +39,38 @@ function downloadCsv(filename: string, csv: string) {
   URL.revokeObjectURL(url);
 }
 
+import { applySavedTheme, setTheme, Theme } from "@/lib/theme";
+
+// ... (imports)
+
 export default function SettingsPage() {
   const router = useRouter();
   const [exporting, setExporting] = useState<ExportRange | null>(null);
   const [resetting, setResetting] = useState(false);
   const [textSize, setTextSizeState] = useState<TextSize>("small");
+  const [theme, setThemeState] = useState<Theme>("dark");
 
   useEffect(() => {
     applySavedTextSize();
+    applySavedTheme();
     if (typeof window !== "undefined") {
       const html = document.documentElement;
-      const saved = (html.dataset.textSize as TextSize | undefined) || "small";
-      setTextSizeState(saved);
+      const savedSize = (html.dataset.textSize as TextSize | undefined) || "small";
+      setTextSizeState(savedSize);
+
+      const savedTheme = (localStorage.getItem("foundation_theme") as Theme) || "dark";
+      setThemeState(savedTheme);
     }
   }, []);
 
   const changeSize = (size: TextSize) => {
     setTextSize(size);
     setTextSizeState(size);
+  };
+
+  const changeTheme = (t: Theme) => {
+    setTheme(t);
+    setThemeState(t);
   };
 
   const handleExport = async (range: ExportRange) => {
@@ -194,26 +208,64 @@ export default function SettingsPage() {
     { label: "Extra Large", value: "xl" },
   ];
 
+  const themeOptions: { label: string; value: Theme }[] = [
+    { label: "Dark", value: "dark" },
+    { label: "Light", value: "light" },
+    { label: "Sunrise", value: "sunrise" },
+  ];
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-20">
+    <div className="min-h-screen bg-app-main text-app-main pb-20 transition-colors duration-300">
       <AuthGuardHeader />
 
       <main className="mx-auto flex max-w-md flex-col gap-6 px-4 pb-24 pt-4">
         <section>
-          <h1 className="text-lg font-semibold text-slate-50">Settings</h1>
-          <p className="mt-1 text-xs text-slate-400">
+          <h1 className="text-lg font-semibold text-app-main">Settings</h1>
+          <p className="mt-1 text-xs text-app-muted">
             Tune your Foundation experience, export your data, or reset this device.
           </p>
         </section>
 
-        {/* Text size */}
-        <section className="space-y-3 rounded-2xl bg-slate-900/80 p-4 ring-1 ring-slate-800">
+        {/* Theme */}
+        <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-100">
+            <h2 className="text-sm font-semibold text-app-main">
+              Theme
+            </h2>
+          </div>
+          <p className="text-xs text-app-muted">
+            Choose your preferred visual style.
+          </p>
+          <div className="flex gap-2">
+            {themeOptions.map((opt) => {
+              const active = opt.value === theme;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => changeTheme(opt.value)}
+                  className={
+                    "flex-1 rounded-full border px-3 py-1.5 text-xs transition " +
+                    (active
+                      ? "border-app-accent bg-app-accent text-app-accent-text"
+                      : "border-app-border bg-app-card text-app-muted hover:border-app-accent")
+                  }
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Text size */}
+        <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-app-main">
               Text size
             </h2>
           </div>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-app-muted">
             Adjust the text size across the app. This is stored only on this device.
           </p>
           <div className="flex gap-2">
@@ -227,8 +279,8 @@ export default function SettingsPage() {
                   className={
                     "flex-1 rounded-full border px-3 py-1.5 text-xs transition " +
                     (active
-                      ? "border-emerald-400 bg-emerald-500/90 text-slate-950"
-                      : "border-slate-700 bg-slate-900 text-slate-200 hover:border-emerald-400")
+                      ? "border-app-accent bg-app-accent text-app-accent-text"
+                      : "border-app-border bg-app-card text-app-muted hover:border-app-accent")
                   }
                 >
                   {opt.label}
@@ -239,11 +291,11 @@ export default function SettingsPage() {
         </section>
 
         {/* Export data */}
-        <section className="space-y-3 rounded-2xl bg-slate-900/80 p-4 ring-1 ring-slate-800">
-          <h2 className="text-sm font-semibold text-slate-100">
+        <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
+          <h2 className="text-sm font-semibold text-app-main">
             Export data
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-app-muted">
             Export your habits, reflections, and goals as a CSV file for your own records.
           </p>
           <div className="flex gap-2">
@@ -251,7 +303,7 @@ export default function SettingsPage() {
               type="button"
               onClick={() => handleExport("30")}
               disabled={exporting !== null}
-              className="flex-1 rounded-full bg-slate-800 px-3 py-1.5 text-xs text-slate-100 ring-1 ring-slate-700 hover:bg-slate-700 disabled:opacity-60"
+              className="flex-1 rounded-full bg-app-card-hover px-3 py-1.5 text-xs text-app-main ring-1 ring-app-border hover:bg-app-card disabled:opacity-60"
             >
               {exporting === "30" ? "Exporting…" : "Last 30 days"}
             </button>
@@ -259,29 +311,29 @@ export default function SettingsPage() {
               type="button"
               onClick={() => handleExport("all")}
               disabled={exporting !== null}
-              className="flex-1 rounded-full bg-slate-800 px-3 py-1.5 text-xs text-slate-100 ring-1 ring-slate-700 hover:bg-slate-700 disabled:opacity-60"
+              className="flex-1 rounded-full bg-app-card-hover px-3 py-1.5 text-xs text-app-main ring-1 ring-app-border hover:bg-app-card disabled:opacity-60"
             >
               {exporting === "all" ? "Exporting…" : "All time"}
             </button>
           </div>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-[11px] text-app-muted">
             Exports are private and stay on your device unless you share the file.
           </p>
         </section>
 
         {/* Reset */}
-        <section className="space-y-3 rounded-2xl bg-slate-900/80 p-4 ring-1 ring-red-500/50">
-          <h2 className="text-sm font-semibold text-red-300">Reset app</h2>
-          <p className="text-xs text-slate-300">
+        <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-red-500/50">
+          <h2 className="text-sm font-semibold text-red-400">Reset app</h2>
+          <p className="text-xs text-app-muted">
             Reset Foundation on <strong>this device only</strong>. This:
           </p>
-          <ul className="list-disc pl-5 text-xs text-slate-300">
+          <ul className="list-disc pl-5 text-xs text-app-muted">
             <li>Clears habits, streaks, and notes.</li>
             <li>Clears reflections.</li>
             <li>Clears current goals and daily intentions.</li>
             <li>Keeps your login session.</li>
           </ul>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-[11px] text-app-muted">
             After reset, you&apos;ll be taken back through the starting questions so
             your goals and daily intention can be recreated by AI.
           </p>
@@ -289,7 +341,7 @@ export default function SettingsPage() {
             type="button"
             onClick={handleReset}
             disabled={resetting}
-            className="mt-1 w-full rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-red-400 disabled:opacity-60"
+            className="mt-1 w-full rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-white hover:bg-red-400 disabled:opacity-60"
           >
             {resetting ? "Resetting…" : "Reset app on this device"}
           </button>
