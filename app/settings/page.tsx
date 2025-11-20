@@ -178,8 +178,8 @@ export default function SettingsPage() {
       }
 
       // RLS should ensure we only delete the current user's rows
-      await Promise.all([
-        supabase.from("foundation_logs").delete().neq("id", "00000000-0000-0000-0000-000000000000"), // Hack to delete all rows (since delete() requires a filter)
+      const results = await Promise.all([
+        supabase.from("foundation_logs").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("foundations").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("reflections").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("goals").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
@@ -187,6 +187,17 @@ export default function SettingsPage() {
         supabase.from("profiles").delete().eq("id", auth.user.id), // profiles uses auth user id as PK
         supabase.from("board_members").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
       ]);
+
+      // Log any errors
+      console.log("[Reset] Deletion results:", results);
+      results.forEach((result, index) => {
+        const tables = ["foundation_logs", "foundations", "reflections", "goals", "daily_intentions", "profiles", "board_members"];
+        if (result.error) {
+          console.error(`[Reset] Failed to delete from ${tables[index]}:`, result.error);
+        } else {
+          console.log(`[Reset] Successfully deleted from ${tables[index]}`);
+        }
+      });
 
       // Do NOT sign out. Just clear onboarding flag so they see questions again.
       window.localStorage.removeItem(ONBOARDING_KEY);
