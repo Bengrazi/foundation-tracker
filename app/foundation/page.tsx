@@ -131,6 +131,8 @@ function computeGoldStreak(
 
   let streak = 0;
   let current = parseISO(selectedDate);
+  const today = format(new Date(), "yyyy-MM-dd");
+  let isFirstDay = true;
 
   for (let i = 0; i < maxLookbackDays; i++) {
     const key = dateKey(current);
@@ -154,7 +156,16 @@ function computeGoldStreak(
     if (allDone) {
       streak += 1;
       current = addDays(current, -1);
+      isFirstDay = false;
     } else {
+      // If this is today and it's incomplete, skip it and continue counting from yesterday
+      // This prevents breaking the streak just because today isn't done yet
+      if (isFirstDay && key === today) {
+        current = addDays(current, -1);
+        isFirstDay = false;
+        continue;
+      }
+      // Break on any other incomplete day (actual missed day)
       break;
     }
   }
@@ -226,10 +237,7 @@ export default function FoundationPage() {
     const checkOnboarding = async () => {
       if (typeof window === "undefined") return;
 
-      const done = window.localStorage.getItem(ONBOARDING_KEY);
-      if (done) return;
-
-      // Not done locally? Check DB.
+      // Always check DB to verify profile exists (handles reset case where localStorage might be cached)
       const { data: auth } = await supabase.auth.getUser();
       if (!auth?.user) {
         setShowOnboarding(true);
@@ -246,7 +254,8 @@ export default function FoundationPage() {
         // Found existing profile -> mark done locally
         window.localStorage.setItem(ONBOARDING_KEY, "1");
       } else {
-        // No profile -> show onboarding
+        // No profile in DB -> clear any stale localStorage and show onboarding
+        window.localStorage.removeItem(ONBOARDING_KEY);
         setShowOnboarding(true);
       }
     };
