@@ -49,7 +49,7 @@ Use the user's values, long-term vision, and ideology to choose examples and ton
   const client = getOpenAIClient();
 
   const completion = await client.chat.completions.create({
-    model: "gpt-4.1",
+    model: "gpt-4o",
     messages: [
       { role: "system", content: system },
       {

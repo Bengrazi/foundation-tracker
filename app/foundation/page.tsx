@@ -341,6 +341,7 @@ export default function FoundationPage() {
 
   const checkCelebration = async (
     foundationId: string,
+    habitTitle: string,
     newStreak: number,
     allDone: boolean,
     goldStreak: number
@@ -376,7 +377,7 @@ export default function FoundationPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message: `Generate a short, powerful, personalized congratulation for a ${trigger} streak of ${count} days.`,
+            message: `Generate a short, powerful, personalized congratulation for a ${trigger} streak of ${count} days for the habit '${habitTitle}'.`,
             contextMode: "celebration",
             profile,
           }),
@@ -400,25 +401,61 @@ export default function FoundationPage() {
 
     const completed = !(existing?.completed ?? false);
 
-    // optimistic update
-    setLogsByDate((prev) => {
-      const dayLogs = [...(prev[selectedDate] || [])];
-      if (existing) {
-        const idx = dayLogs.findIndex((l) => l.id === existing.id);
-        if (idx !== -1) {
-          dayLogs[idx] = { ...existing, completed };
-        }
-      } else {
-        dayLogs.push({
-          id: `temp-${Date.now()}`,
-          foundation_id: foundation.id,
-          date: selectedDate,
-          completed,
-          notes: null,
-        });
+    // Calculate new state locally for celebration check
+    const nextLogsByDate = { ...logsByDate };
+    const dayLogs = [...(nextLogsByDate[selectedDate] || [])];
+
+    if (existing) {
+      const idx = dayLogs.findIndex((l) => l.id === existing.id);
+      if (idx !== -1) {
+        dayLogs[idx] = { ...existing, completed };
       }
-      return { ...prev, [selectedDate]: dayLogs };
-    });
+    } else {
+      dayLogs.push({
+        id: `temp-${Date.now()}`,
+        foundation_id: foundation.id,
+        date: selectedDate,
+        completed,
+        notes: null,
+      });
+    }
+    nextLogsByDate[selectedDate] = dayLogs;
+
+    // Optimistic update
+    setLogsByDate(nextLogsByDate);
+
+    // Check celebration
+    if (completed) {
+      const newStreak = computeStreakForFoundation(
+        foundation,
+        nextLogsByDate,
+        selectedDate
+      );
+      const newGoldStreak = computeGoldStreak(
+        foundations,
+        nextLogsByDate,
+        selectedDate
+      );
+
+      const activeToday = foundations.filter((f) => {
+        if (selectedDate < f.start_date) return false;
+        if (f.end_date && selectedDate > f.end_date) return false;
+        return matchesSchedule(f.schedule_type, selectedDate, f.x_per_week);
+      });
+
+      const allDone = activeToday.every((f) => {
+        const log = dayLogs.find((l) => l.foundation_id === f.id);
+        return log?.completed;
+      });
+
+      checkCelebration(
+        foundation.id,
+        foundation.title,
+        newStreak,
+        allDone,
+        newGoldStreak
+      );
+    }
 
     // persist
     if (existing) {
@@ -440,17 +477,17 @@ export default function FoundationPage() {
 
       if (!error && data) {
         setLogsByDate((prev) => {
-          const dayLogs = [...(prev[selectedDate] || [])];
+          const currentDayLogs = [...(prev[selectedDate] || [])];
           // replace temp with real row
-          const tempIdx = dayLogs.findIndex((l) =>
+          const tempIdx = currentDayLogs.findIndex((l) =>
             String(l.id).startsWith("temp-")
           );
           if (tempIdx !== -1) {
-            dayLogs[tempIdx] = data as FoundationLog;
+            currentDayLogs[tempIdx] = data as FoundationLog;
           } else {
-            dayLogs.push(data as FoundationLog);
+            currentDayLogs.push(data as FoundationLog);
           }
-          return { ...prev, [selectedDate]: dayLogs };
+          return { ...prev, [selectedDate]: currentDayLogs };
         });
       }
     }
