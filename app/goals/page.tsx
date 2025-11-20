@@ -113,7 +113,10 @@ export default function GoalsPage() {
   }
 
   async function moveGoal(goal: Goal, direction: "up" | "down") {
-    const group = goals.filter((g) => g.horizon === goal.horizon).sort((a, b) => a.order_index - b.order_index);
+    const group = goals
+      .filter((g) => g.horizon === goal.horizon)
+      .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+
     const index = group.findIndex((g) => g.id === goal.id);
     if (index === -1) return;
 
@@ -123,22 +126,32 @@ export default function GoalsPage() {
     const other = group[swapIndex];
 
     // Swap order_index
-    const newOrder = other.order_index;
-    const otherOrder = goal.order_index;
+    // If order_index is missing, default to a value based on index
+    const goalOrder = goal.order_index ?? index;
+    const otherOrder = other.order_index ?? swapIndex;
+
+    // If they happen to be equal (both 0 or null), force a spread
+    let newGoalOrder = otherOrder;
+    let newOtherOrder = goalOrder;
+
+    if (newGoalOrder === newOtherOrder) {
+      newGoalOrder = swapIndex;
+      newOtherOrder = index;
+    }
 
     // Optimistic update
     setGoals((prev) =>
       prev.map((g) => {
-        if (g.id === goal.id) return { ...g, order_index: newOrder };
-        if (g.id === other.id) return { ...g, order_index: otherOrder };
+        if (g.id === goal.id) return { ...g, order_index: newGoalOrder };
+        if (g.id === other.id) return { ...g, order_index: newOtherOrder };
         return g;
       })
     );
 
     // Persist
     await Promise.all([
-      supabase.from("goals").update({ order_index: newOrder }).eq("id", goal.id),
-      supabase.from("goals").update({ order_index: otherOrder }).eq("id", other.id),
+      supabase.from("goals").update({ order_index: newGoalOrder }).eq("id", goal.id),
+      supabase.from("goals").update({ order_index: newOtherOrder }).eq("id", other.id),
     ]);
   }
 
@@ -228,13 +241,6 @@ export default function GoalsPage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <button
-              onClick={handleSaveAll}
-              disabled={loading}
-              className="rounded-full bg-app-accent px-4 py-1.5 text-xs text-app-accent-text shadow font-semibold disabled:opacity-60"
-            >
-              Save goals
-            </button>
             <button
               onClick={() => setShowNewGoal((v) => !v)}
               className="rounded-full border border-app-border bg-app-card px-3 py-1 text-[11px] text-app-main hover:border-app-accent"

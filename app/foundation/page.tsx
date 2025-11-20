@@ -17,6 +17,7 @@ type Foundation = {
   x_per_week: number | null;
   start_date: string; // "yyyy-MM-dd"
   end_date: string | null; // null = still active
+  user_id: string;
 };
 
 type FoundationLog = {
@@ -162,7 +163,7 @@ function computeGoldStreak(
 
 // ---------- Initial default foundations ----------
 
-const DEFAULT_FOUNDATIONS: Omit<Foundation, "id" | "start_date" | "end_date">[] =
+const DEFAULT_FOUNDATIONS: Omit<Foundation, "id" | "start_date" | "end_date" | "user_id">[] =
   [
     {
       title: "Complete A+ Problem",
@@ -339,6 +340,35 @@ export default function FoundationPage() {
 
   // ---------- Celebration Logic ----------
 
+  const handleMoveFoundation = async (id: string, direction: "up" | "down") => {
+    const index = foundations.findIndex((f) => f.id === id);
+    if (index === -1) return;
+    if (direction === "up" && index === 0) return;
+    if (direction === "down" && index === foundations.length - 1) return;
+
+    const newFoundations = [...foundations];
+    const swapIndex = direction === "up" ? index - 1 : index + 1;
+
+    // Swap in state
+    [newFoundations[index], newFoundations[swapIndex]] = [
+      newFoundations[swapIndex],
+      newFoundations[index],
+    ];
+    setFoundations(newFoundations);
+
+    // Update order_index in DB
+    // We'll just update both rows to be safe
+    const f1 = newFoundations[index];
+    const f2 = newFoundations[swapIndex];
+
+    // Optimistic update is done, now persist
+    // Note: We are using the array index as the order_index
+    await supabase.from("foundations").upsert([
+      { id: f1.id, order_index: index, title: f1.title, user_id: f1.user_id },
+      { id: f2.id, order_index: swapIndex, title: f2.title, user_id: f2.user_id },
+    ]);
+  };
+
   const checkCelebration = async (
     foundationId: string,
     habitTitle: string,
@@ -347,8 +377,19 @@ export default function FoundationPage() {
     goldStreak: number
   ) => {
     // Milestones
-    const goldMilestones = [1, 7, 10, 13, 25, 50, 69, 100, 150, 200, 250, 300, 350, 365, 400, 500, 600, 700, 730, 800, 900, 1000, 1095, 1250, 1460, 1500, 1825];
-    const habitMilestones = [3, 7, 14, 21, 30, 50, 69, 100, 365];
+    const goldMilestones = [7, 30, 69, 100, 365];
+    const habitMilestones = [7, 30, 69, 100, 365];
+
+    // Check settings
+    const savedCoach = localStorage.getItem("foundation_ai_coach_enabled");
+    if (savedCoach === "false") return;
+
+    // Check daily limit
+    const today = new Date().toDateString();
+    const dailyKey = `foundation_celebration_count_${today}`;
+    const dailyCount = parseInt(localStorage.getItem(dailyKey) || "0", 10);
+
+    if (dailyCount >= 2) return;
 
     let trigger = "";
     let count = 0;
@@ -363,6 +404,9 @@ export default function FoundationPage() {
     }
 
     if (trigger) {
+      // Increment daily count
+      localStorage.setItem(dailyKey, String(dailyCount + 1));
+
       setShowCelebration(true);
       setCelebrationLoading(true);
       try {
@@ -882,13 +926,33 @@ export default function FoundationPage() {
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => handleDeleteFoundationFromTodayForward(f)}
-                          disabled={deletingId === f.id}
-                          className="text-[10px] text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-900/30 bg-red-950/20"
-                        >
-                          {deletingId === f.id ? "Removing..." : "Remove"}
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleMoveFoundation(f.id, "up")}
+                            className="p-1 text-app-muted hover:text-app-main disabled:opacity-30"
+                            disabled={loading} // simplistic disable
+                          >
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleMoveFoundation(f.id, "down")}
+                            className="p-1 text-app-muted hover:text-app-main disabled:opacity-30"
+                            disabled={loading}
+                          >
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteFoundationFromTodayForward(f)}
+                            disabled={deletingId === f.id}
+                            className="ml-1 text-[10px] text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-900/30 bg-red-950/20"
+                          >
+                            {deletingId === f.id ? "..." : "Remove"}
+                          </button>
+                        </div>
                       </div>
 
                       <textarea
