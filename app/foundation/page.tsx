@@ -6,6 +6,9 @@ import { AuthGuardHeader } from "@/components/AuthGuardHeader";
 import { supabase } from "@/lib/supabaseClient";
 import { applySavedTextSize } from "@/lib/textSize";
 import { applySavedTheme } from "@/lib/theme";
+import { DailyIntentionCard } from "@/components/DailyIntentionCard";
+import { CelebrationModal } from "@/components/CelebrationModal";
+import { DailyIntention } from "@/lib/engagementTypes";
 
 // ------------- Types -------------
 
@@ -63,13 +66,10 @@ function matchesSchedule(
     case "weekdays":
       return isWeekday(dateStr);
     case "weekly":
-      // treat any chosen day as eligible; actual enforcement is
-      // done by user behaviour, not by blocking UI
       return true;
     case "monthly":
       return true;
     case "xPerWeek":
-      // same as weekly – we let user choose which days to hit
       return (xPerWeek ?? 1) > 0;
     default:
       return true;
@@ -97,12 +97,10 @@ function computeStreakForFoundation(
   for (let i = 0; i < maxLookbackDays; i++) {
     const key = dateKey(current);
 
-    // outside active window?
     if (key < foundation.start_date) break;
     if (foundation.end_date && key > foundation.end_date) break;
 
     if (!matchesSchedule(foundation.schedule_type, key, foundation.x_per_week)) {
-      // skip non-scheduled days without breaking streak
       current = addDays(current, -1);
       continue;
     }
@@ -121,7 +119,6 @@ function computeStreakForFoundation(
   return streak;
 }
 
-// Calculates gold streak: counts consecutive days where ALL active habits were completed
 function computeGoldStreak(
   foundations: Foundation[],
   logsByDate: LogsByDate,
@@ -158,23 +155,17 @@ function computeGoldStreak(
       current = addDays(current, -1);
       isFirstDay = false;
     } else {
-      // If this is the first day we're checking (selectedDate) and it's incomplete,
-      // skip it and continue counting from the previous day
-      // This shows the streak up to yesterday when today isn't done yet
       if (isFirstDay) {
         current = addDays(current, -1);
         isFirstDay = false;
         continue;
       }
-      // Break on any other incomplete day (actual missed day in the past)
       break;
     }
   }
 
   return streak;
 }
-
-// ---------- Initial default foundations ----------
 
 const DEFAULT_FOUNDATIONS: Omit<Foundation, "id" | "start_date" | "end_date" | "user_id">[] =
   [
@@ -212,7 +203,6 @@ export default function FoundationPage() {
 
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState("");
-  const [celebrationLoading, setCelebrationLoading] = useState(false);
 
   const [newTitle, setNewTitle] = useState("");
   const [newSchedule, setNewSchedule] = useState<ScheduleType>("daily");
@@ -226,80 +216,81 @@ export default function FoundationPage() {
   });
   const [savingOnboarding, setSavingOnboarding] = useState(false);
 
-  // text size + onboarding check on mount
+  const [dailyIntention, setDailyIntention] = useState<DailyIntention | null>(null);
+
   useEffect(() => {
     applySavedTextSize();
     applySavedTheme();
 
     const checkOnboarding = async () => {
       if (typeof window === "undefined") return;
-
-      console.log("[Onboarding] Checking onboarding status...");
-
-      // Always check DB to verify profile exists (handles reset case where localStorage might be cached)
       const { data: auth } = await supabase.auth.getUser();
       if (!auth?.user) {
-        console.log("[Onboarding] No user found, showing onboarding");
         setShowOnboarding(true);
         return;
       }
-
-      console.log("[Onboarding] User found, checking profile in DB");
       const { data: profile } = await supabase
         .from("profiles")
         .select("priorities, life_summary")
         .eq("id", auth.user.id)
         .single();
 
-      console.log("[Onboarding] Profile data:", profile);
-
       if (profile && profile.priorities && profile.life_summary) {
-        // Found existing profile -> mark done locally
-        console.log("[Onboarding] Profile exists with data, skipping onboarding");
         window.localStorage.setItem(ONBOARDING_KEY, "1");
       } else {
-        // No profile in DB -> clear any stale localStorage and show onboarding
-        console.log("[Onboarding] No profile or missing data, showing onboarding");
         window.localStorage.removeItem(ONBOARDING_KEY);
         setShowOnboarding(true);
       }
     };
 
     checkOnboarding();
+
+    // Fetch Daily Intention
+    async function fetchIntention() {
+      const today = format(new Date(), "yyyy-MM-dd");
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const res = await fetch(`/api/intention?date=${today}`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setDailyIntention(data);
+        }
+      } catch (e) {
+        console.error("Failed to fetch intention", e);
+      }
+    }
+    fetchIntention();
   }, []);
 
-  // Load foundations + logs whenever date changes (and on first load)
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
       setLoading(true);
-
-      // 1. Ensure user is logged in (RLS will handle user scoping)
       const { data: auth } = await supabase.auth.getUser();
       if (!auth?.user) {
         setLoading(false);
         return;
       }
 
-      // 2. Load foundations (active + created up to selectedDate)
       const { data: fdData, error: fdError } = await supabase
-        .from("foundations") // TODO: confirm table name
+        .from("foundations")
         .select("*")
         .lte("start_date", selectedDate)
         .or(`end_date.is.null,end_date.gte.${selectedDate}`)
         .order("start_date", { ascending: true });
 
-      if (fdError) {
-        console.error("Error loading foundations", fdError);
-      }
+      if (fdError) console.error("Error loading foundations", fdError);
 
       const foundationsLoaded = (fdData || []) as Foundation[];
 
-      // If there are ZERO foundations at all, seed defaults starting today.
       if (!fdError && foundationsLoaded.length === 0) {
-        // Double-check: does the user have ANY foundations? 
-        // (If we are viewing a past date, foundationsLoaded might be empty but user has future habits)
         const { count } = await supabase
           .from("foundations")
           .select("*", { count: "exact", head: true })
@@ -319,40 +310,30 @@ export default function FoundationPage() {
             .insert(inserts)
             .select("*");
 
-          if (seedError) {
-            console.error("Error seeding default foundations", seedError);
-            alert("Failed to seed default habits. Please try resetting again.");
-          }
-
           if (!seedError && seeded) {
             foundationsLoaded.push(...(seeded as Foundation[]));
           }
         }
       }
 
-      // 3. Load logs for last 60 days
       const from = format(addDays(parseISO(selectedDate), -60), "yyyy-MM-dd");
       const { data: logsData, error: logsError } = await supabase
-        .from("foundation_logs") // TODO: confirm table name
+        .from("foundation_logs")
         .select("*")
         .gte("date", from)
         .lte("date", selectedDate)
         .order("date", { ascending: true });
 
-      if (logsError) {
-        console.error("Error loading foundation logs", logsError);
-      }
+      if (logsError) console.error("Error loading foundation logs", logsError);
 
       if (!cancelled) {
         setFoundations(foundationsLoaded);
         setLogsByDate(groupLogsByDate((logsData || []) as FoundationLog[]));
         setLoading(false);
       }
-
     };
 
     load();
-
     return () => {
       cancelled = true;
     };
@@ -376,36 +357,6 @@ export default function FoundationPage() {
     return map;
   }, [foundations, logsByDate, selectedDate]);
 
-  // ---------- Celebration Logic ----------
-
-  const prefetchCelebration = async (
-    trigger: "gold" | "habit",
-    count: number,
-    habitTitle: string,
-    profile: any
-  ) => {
-    const cacheKey = `foundation_cache_${trigger}_${count}_${habitTitle || "gold"}`;
-    if (localStorage.getItem(cacheKey)) return; // Already cached
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: `Generate a short, powerful, personalized congratulation for a ${trigger} streak of ${count} days for the habit '${habitTitle}'. Keep it like a fortune cookie.`,
-          contextMode: "celebration",
-          profile,
-        }),
-      });
-      const json = await res.json();
-      if (json.reply) {
-        localStorage.setItem(cacheKey, json.reply);
-      }
-    } catch (e) {
-      console.error("Prefetch failed", e);
-    }
-  };
-
   const handleMoveFoundation = async (id: string, direction: "up" | "down") => {
     const index = foundations.findIndex((f) => f.id === id);
     if (index === -1) return;
@@ -415,20 +366,15 @@ export default function FoundationPage() {
     const newFoundations = [...foundations];
     const swapIndex = direction === "up" ? index - 1 : index + 1;
 
-    // Swap in state
     [newFoundations[index], newFoundations[swapIndex]] = [
       newFoundations[swapIndex],
       newFoundations[index],
     ];
     setFoundations(newFoundations);
 
-    // Update order_index in DB
-    // We'll just update both rows to be safe
     const f1 = newFoundations[index];
     const f2 = newFoundations[swapIndex];
 
-    // Optimistic update is done, now persist
-    // Note: We are using the array index as the order_index
     await supabase.from("foundations").upsert([
       { id: f1.id, order_index: index, title: f1.title, user_id: f1.user_id },
       { id: f2.id, order_index: swapIndex, title: f2.title, user_id: f2.user_id },
@@ -442,11 +388,9 @@ export default function FoundationPage() {
     allDone: boolean,
     goldStreak: number
   ) => {
-    // Milestones
     const goldMilestones = [1, 3, 7, 14, 30, 60, 90, 100, 365];
-    const habitMilestones = [3, 7, 14, 30, 60, 90, 100, 365];
+    const habitMilestones = [7, 30, 60, 90, 100, 365];
 
-    // Check settings
     const savedCoach = localStorage.getItem("foundation_ai_coach_enabled");
     if (savedCoach === "false") return;
 
@@ -462,29 +406,29 @@ export default function FoundationPage() {
     let count = 0;
     let isFirstGold = false;
 
-    // Check Gold Streak
+    // 1. Check Gold Streak
     if (allDone) {
-      // Special case: First ever gold streak (or just first time seeing the note)
       const firstGoldShown = localStorage.getItem(firstGoldKey);
       if (!firstGoldShown) {
-        trigger = "gold";
+        trigger = "gold_streak";
         count = goldStreak;
         isFirstGold = true;
       } else if (goldMilestones.includes(goldStreak) && goldCount < 1) {
-        trigger = "gold";
+        trigger = "gold_streak";
         count = goldStreak;
       }
     }
 
-    // If not gold, check standard habit streak
-    if (!trigger && habitMilestones.includes(newStreak) && stdCount < 5) {
-      trigger = "habit";
+    // 2. Check Habit Streak
+    // Only show habit streak if NO gold streak today AND no other habit streak today
+    if (!trigger && habitMilestones.includes(newStreak) && stdCount < 1 && goldCount < 1) {
+      trigger = "habit_streak";
       count = newStreak;
     }
 
     if (trigger) {
       // Update limits
-      if (trigger === "gold") {
+      if (trigger === "gold_streak") {
         localStorage.setItem(goldKey, String(goldCount + 1));
         if (isFirstGold) {
           localStorage.setItem(firstGoldKey, "true");
@@ -493,58 +437,63 @@ export default function FoundationPage() {
         localStorage.setItem(stdKey, String(stdCount + 1));
       }
 
-      setShowCelebration(true);
-      setCelebrationLoading(true);
-
-      // Check cache first
-      const cacheKey = `foundation_cache_${trigger}_${count}_${habitTitle || "gold"}`;
-      const cached = localStorage.getItem(cacheKey);
-
-      if (cached && !isFirstGold) {
-        setCelebrationMessage(cached);
-        setCelebrationLoading(false);
-        localStorage.removeItem(cacheKey); // Consume cache
-        return;
-      }
-
+      // Fetch celebration from API
       try {
-        const { data: auth } = await supabase.auth.getUser();
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", auth.user?.id)
-          .single();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
 
-        let prompt = "";
-        if (isFirstGold) {
-          prompt = `This is the user's FIRST EVER Gold Streak (completing all daily habits). 
-          Generate a celebratory note (max 2 sentences). 
-          Explain that these notes will pop up to celebrate their consistency and are editable in settings. 
-          Congratulate them on this first perfect day.`;
-        } else {
-          prompt = `Generate a short, powerful, personalized congratulation for a ${trigger} streak of ${count} days for the habit '${habitTitle}'. Keep it like a fortune cookie.`;
-        }
-
-        const res = await fetch("/api/chat", {
+        const res = await fetch("/api/celebration", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
           body: JSON.stringify({
-            message: prompt,
-            contextMode: "celebration",
-            profile,
+            type: trigger,
+            streak_days: count,
+            habit_id: trigger === "habit_streak" ? foundationId : undefined,
+            habit_title: habitTitle,
           }),
         });
-        const json = await res.json();
-        setCelebrationMessage(json.reply);
+
+        if (res.ok) {
+          const data = await res.json();
+          setCelebrationMessage(data.message);
+          setShowCelebration(true);
+        }
       } catch (e) {
-        setCelebrationMessage(`Amazing job! ${count} days streak!`);
-      } finally {
-        setCelebrationLoading(false);
+        console.error("Failed to fetch celebration", e);
       }
     }
-  };
 
-  // ---------- Foundation CRUD ----------
+    // 3. Trigger Precompute (Event-Driven)
+    // We do this if allDone is true OR if we just completed a habit
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Calculate all habit streaks for precompute context
+        const habitStreaks = foundations.map(f => ({
+          id: f.id,
+          title: f.title,
+          streak: f.id === foundationId ? newStreak : (streakByFoundationId[f.id] || 0)
+        }));
+
+        fetch("/api/precompute", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            gold_streak: goldStreak,
+            habit_streaks: habitStreaks
+          }),
+        });
+      }
+    } catch (e) {
+      console.error("Precompute trigger failed", e);
+    }
+  };
 
   const handleToggleFoundation = async (foundation: Foundation) => {
     const existing = logsForSelectedDay.find(
@@ -553,7 +502,6 @@ export default function FoundationPage() {
 
     const completed = !(existing?.completed ?? false);
 
-    // Calculate new state locally for celebration check
     const nextLogsByDate = { ...logsByDate };
     const dayLogs = [...(nextLogsByDate[selectedDate] || [])];
 
@@ -573,10 +521,8 @@ export default function FoundationPage() {
     }
     nextLogsByDate[selectedDate] = dayLogs;
 
-    // Optimistic update
     setLogsByDate(nextLogsByDate);
 
-    // Check celebration
     if (completed) {
       const newStreak = computeStreakForFoundation(
         foundation,
@@ -607,46 +553,8 @@ export default function FoundationPage() {
         allDone,
         newGoldStreak
       );
-
-      // --- Prefetch Logic ---
-      // 1. Check if we are 1 habit away from Gold Streak for TOMORROW (or next completion)
-      // Actually, user wants: "call when all but 1 are checked off".
-      // So if we just completed one, and now we have (Total - 1) done, we prefetch for the LAST one.
-      const completedCount = activeToday.filter((f) => {
-        const log = dayLogs.find((l) => l.foundation_id === f.id);
-        return log?.completed;
-      }).length;
-
-      if (completedCount === activeToday.length - 1) {
-        // We are 1 away from Gold.
-        // Calculate what the Gold Streak WOULD be if we finished the last one.
-        // We can reuse newGoldStreak logic but assume allDone = true.
-        // If today is NOT allDone yet (which it isn't, we are 1 away), computeGoldStreak returns streak up to yesterday.
-        // So the potential streak is current_gold_streak + 1.
-        const potentialGold = newGoldStreak + 1;
-        const goldMilestones = [1, 3, 7, 14, 30, 60, 90, 100, 365];
-
-        if (goldMilestones.includes(potentialGold)) {
-          // Prefetch Gold
-          supabase.from("profiles").select("*").eq("id", foundation.user_id).single().then(({ data }) => {
-            prefetchCelebration("gold", potentialGold, "", data);
-          });
-        }
-      }
-
-      // 2. Check if we are 1 day away from Habit Milestone
-      // User said: "complete 6th day, deliver on 7th".
-      // So if newStreak == milestone - 1, prefetch for milestone.
-      const habitMilestones = [3, 7, 14, 30, 60, 90, 100, 365];
-      const nextMilestone = habitMilestones.find(m => m === newStreak + 1);
-      if (nextMilestone) {
-        supabase.from("profiles").select("*").eq("id", foundation.user_id).single().then(({ data }) => {
-          prefetchCelebration("habit", nextMilestone, foundation.title, data);
-        });
-      }
     }
 
-    // persist
     if (existing) {
       await supabase
         .from("foundation_logs")
@@ -667,7 +575,6 @@ export default function FoundationPage() {
       if (!error && data) {
         setLogsByDate((prev) => {
           const currentDayLogs = [...(prev[selectedDate] || [])];
-          // replace temp with real row
           const tempIdx = currentDayLogs.findIndex((l) =>
             String(l.id).startsWith("temp-")
           );
@@ -687,7 +594,6 @@ export default function FoundationPage() {
       (l) => l.foundation_id === foundation.id
     );
 
-    // optimistic
     setLogsByDate((prev) => {
       const dayLogs = [...(prev[selectedDate] || [])];
       if (existing) {
@@ -787,7 +693,6 @@ export default function FoundationPage() {
     if (!confirm("Are you sure you want to remove this habit?")) return;
 
     setDeletingId(foundation.id);
-    // Don’t delete past logs. Just mark end_date = selectedDate - 1.
     const prevDay = dateKey(addDays(parseISO(selectedDate), -1));
 
     const { data, error } = await supabase
@@ -814,8 +719,6 @@ export default function FoundationPage() {
     );
   };
 
-  // ---------- Onboarding ----------
-
   const handleOnboardingChange = (field: keyof OnboardingState, value: string) =>
     setOnboarding((prev) => ({ ...prev, [field]: value }));
 
@@ -835,11 +738,9 @@ export default function FoundationPage() {
       if (!res.ok) throw new Error("Failed to generate onboarding data");
 
       const data = await res.json();
-      // data: { keyTruth, board, goals, aiVoice }
 
       const { data: auth } = await supabase.auth.getUser();
       if (auth?.user) {
-        // 1. Save Profile
         await supabase.from("profiles").upsert({
           id: auth.user.id,
           priorities: onboarding.priorities,
@@ -849,7 +750,6 @@ export default function FoundationPage() {
           ai_voice: data.aiVoice,
         });
 
-        // 2. Save Board Members
         if (Array.isArray(data.board)) {
           const members = data.board.map((m: any) => ({
             user_id: auth.user.id,
@@ -860,10 +760,8 @@ export default function FoundationPage() {
           await supabase.from("board_members").insert(members);
         }
 
-        // 3. Save Goals
         if (data.goals) {
           const goalInserts: any[] = [];
-          // horizons: 3y, 1y, 6m, 1m
           for (const horizon of ["3y", "1y", "6m", "1m"]) {
             const list = data.goals[horizon];
             if (Array.isArray(list)) {
@@ -873,7 +771,6 @@ export default function FoundationPage() {
                   title: g.title,
                   horizon,
                   status: "not_started",
-                  // rough estimates for target_date
                   target_date:
                     horizon === "3y"
                       ? format(addDays(new Date(), 365 * 3), "yyyy-MM-dd")
@@ -906,17 +803,26 @@ export default function FoundationPage() {
     }
   };
 
-  // ---------- Render ----------
-
   const habitsDoneToday = foundations.filter((f) =>
     logsForSelectedDay.some((l) => l.foundation_id === f.id && l.completed)
   ).length;
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-app-main text-app-muted">
+        Loading Foundation...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-app-main text-app-main pb-20 transition-colors duration-300">
       <AuthGuardHeader />
 
       <main className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-24 pt-2">
+        {/* Daily Intention */}
+        {dailyIntention && <DailyIntentionCard intention={dailyIntention} />}
+
         {/* Date header */}
         <section className="mt-2 flex items-center justify-between">
           <div>
@@ -1030,7 +936,6 @@ export default function FoundationPage() {
               const completed = log?.completed ?? false;
               const streak = streakByFoundationId[f.id] ?? 0;
 
-              // Check if all active habits are done for the gold border
               const activeToday = foundations.filter((found) => {
                 if (selectedDate < found.start_date) return false;
                 if (found.end_date && selectedDate > found.end_date) return false;
@@ -1123,111 +1028,91 @@ export default function FoundationPage() {
                     <textarea
                       value={log?.notes ?? ""}
                       onChange={(e) => handleNotesChange(f, e.target.value)}
-                      placeholder="Notes or extra effort..."
+                      placeholder="Notes..."
+                      className="w-full resize-none rounded bg-transparent text-xs text-app-muted placeholder-app-muted/50 outline-none"
                       rows={1}
-                      className="w-full resize-none rounded-xl border border-app-border bg-app-input px-3 py-1.5 text-xs text-app-main outline-none focus:border-app-accent"
+                      style={{ minHeight: "1.5em" }}
                     />
                   </div>
                 </div>
               );
             })}
         </section>
-
-        {/* Celebration Modal */}
-        {showCelebration && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-3xl bg-app-card p-6 text-center ring-1 ring-app-border shadow-2xl">
-              <div className="mb-4 text-4xl">🎉</div>
-              <h3 className="mb-2 text-xl font-bold text-app-main">
-                Congratulations!
-              </h3>
-              <div className="mb-6 text-sm text-app-muted min-h-[60px] flex items-center justify-center">
-                {celebrationLoading ? (
-                  <span className="animate-pulse">Asking your AI coach...</span>
-                ) : (
-                  celebrationMessage
-                )}
-              </div>
-              <button
-                onClick={() => setShowCelebration(false)}
-                className="w-full rounded-full bg-app-accent py-2 text-sm font-semibold text-app-accent-text hover:bg-app-accent-hover"
-              >
-                Keep it up!
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Onboarding Modal */}
-        {showOnboarding && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-3xl bg-app-card p-6 ring-1 ring-app-border shadow-2xl max-h-[90vh] overflow-y-auto">
-              <h2 className="mb-2 text-xl font-bold text-app-main">
-                Welcome to Foundation
-              </h2>
-              <p className="mb-6 text-sm text-app-muted">
-                These answers will help set up your personalized Foundation AI coach.
-              </p>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-app-muted">
-                    What are your top 3 priorities right now?
-                  </label>
-                  <textarea
-                    value={onboarding.priorities}
-                    onChange={(e) =>
-                      handleOnboardingChange("priorities", e.target.value)
-                    }
-                    placeholder="e.g. Health, Building my startup, Family connection..."
-                    className="w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-main outline-none focus:border-app-accent"
-                    rows={2}
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-app-muted">
-                    What is your 10-year vision or life summary?
-                  </label>
-                  <textarea
-                    value={onboarding.lifeSummary}
-                    onChange={(e) =>
-                      handleOnboardingChange("lifeSummary", e.target.value)
-                    }
-                    placeholder="e.g. I want to be a leader in tech, living on a farm..."
-                    className="w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-main outline-none focus:border-app-accent"
-                    rows={3}
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-app-muted">
-                    Any specific ideology, philosophy, or religion? (Optional)
-                  </label>
-                  <input
-                    value={onboarding.ideology}
-                    onChange={(e) =>
-                      handleOnboardingChange("ideology", e.target.value)
-                    }
-                    placeholder="e.g. Stoicism, Christianity, Buddhism..."
-                    className="w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-main outline-none focus:border-app-accent"
-                  />
-                </div>
-              </div>
-
-              <button
-                onClick={handleOnboardingSubmit}
-                disabled={savingOnboarding}
-                className="mt-6 w-full rounded-full bg-app-accent py-2.5 text-sm font-semibold text-app-accent-text hover:bg-app-accent-hover disabled:opacity-60"
-              >
-                {savingOnboarding ? "Generating Plan..." : "Create My Foundation"}
-              </button>
-
-
-            </div>
-          </div>
-        )}
       </main>
+
+      {/* Onboarding Modal */}
+      {showOnboarding && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-app-card p-6 shadow-2xl ring-1 ring-app-border">
+            <h2 className="mb-2 text-xl font-bold text-app-main">
+              Welcome to Foundation
+            </h2>
+            <p className="mb-6 text-sm text-app-muted">
+              Let’s set up your AI coach.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-app-muted uppercase tracking-wide">
+                  Top 3 Priorities
+                </label>
+                <input
+                  className="w-full rounded-xl border border-app-border bg-app-input px-4 py-3 text-sm text-app-main outline-none focus:border-app-accent transition-colors"
+                  placeholder="e.g. Health, Startup, Family"
+                  value={onboarding.priorities}
+                  onChange={(e) =>
+                    handleOnboardingChange("priorities", e.target.value)
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-app-muted uppercase tracking-wide">
+                  Life Summary & 10-Year Vision
+                </label>
+                <textarea
+                  className="h-24 w-full resize-none rounded-xl border border-app-border bg-app-input px-4 py-3 text-sm text-app-main outline-none focus:border-app-accent transition-colors"
+                  placeholder="Where are you now? Where do you want to be?"
+                  value={onboarding.lifeSummary}
+                  onChange={(e) =>
+                    handleOnboardingChange("lifeSummary", e.target.value)
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-app-muted uppercase tracking-wide">
+                  Ideology / Worldview (Optional)
+                </label>
+                <input
+                  className="w-full rounded-xl border border-app-border bg-app-input px-4 py-3 text-sm text-app-main outline-none focus:border-app-accent transition-colors"
+                  placeholder="e.g. Stoicism, Christianity, Tech-Optimism"
+                  value={onboarding.ideology}
+                  onChange={(e) =>
+                    handleOnboardingChange("ideology", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleOnboardingSubmit}
+              disabled={savingOnboarding}
+              className="mt-8 w-full rounded-full bg-app-accent py-3 text-sm font-bold text-app-accent-text hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {savingOnboarding ? "Generating Plan..." : "Create My Plan"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Celebration Modal */}
+      {showCelebration && (
+        <CelebrationModal
+          message={celebrationMessage}
+          onClose={() => setShowCelebration(false)}
+        />
+      )}
     </div>
   );
 }

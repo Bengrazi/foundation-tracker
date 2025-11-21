@@ -13,7 +13,7 @@ function getOpenAIClient() {
 }
 
 export async function POST(req: Request) {
-  const { message, contextMode, profile } = await req.json();
+  const { message, contextMode, profile, goals } = await req.json();
 
   let contextDescription = "";
   if (contextMode === "last7days") {
@@ -47,6 +47,11 @@ Preferred tone: ${profile.ai_voice ?? ""}
 
   const client = getOpenAIClient();
 
+  let goalsText = "";
+  if (goals && Array.isArray(goals)) {
+    goalsText = "User Goals:\n" + goals.map((g: any) => `- ${g.title} (${g.horizon})`).join("\n");
+  }
+
   const completion = await client.chat.completions.create({
     model: "gpt-4o",
     messages: [
@@ -56,6 +61,7 @@ Preferred tone: ${profile.ai_voice ?? ""}
         content:
           `Context mode: ${contextDescription}\n\n` +
           (profileText ? `User profile:\n${profileText}\n\n` : "") +
+          (goalsText ? `${goalsText}\n\n` : "") +
           `User says: ${message}`,
       },
     ],
