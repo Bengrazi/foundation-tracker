@@ -1,5 +1,7 @@
 "use client";
 
+
+
 import { useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { setTheme, Theme } from "@/lib/theme";
@@ -27,7 +29,19 @@ export function SettingsSync() {
             }
         };
 
+        // Initial check
         sync();
+
+        // Listen for auth changes (e.g. session restore, login)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+                sync();
+            }
+        });
+
+        return () => {
+            subscription.unsubscribe();
+        };
     }, []);
 
     return null;
