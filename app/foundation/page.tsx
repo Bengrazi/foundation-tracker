@@ -5,6 +5,7 @@ import { addDays, format, parseISO } from "date-fns";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
 import { supabase } from "@/lib/supabaseClient";
 import { applySavedTextSize } from "@/lib/textSize";
+import { applySavedTheme } from "@/lib/theme";
 
 // ------------- Types -------------
 
@@ -228,6 +229,7 @@ export default function FoundationPage() {
   // text size + onboarding check on mount
   useEffect(() => {
     applySavedTextSize();
+    applySavedTheme();
 
     const checkOnboarding = async () => {
       if (typeof window === "undefined") return;
@@ -376,6 +378,34 @@ export default function FoundationPage() {
 
   // ---------- Celebration Logic ----------
 
+  const prefetchCelebration = async (
+    trigger: "gold" | "habit",
+    count: number,
+    habitTitle: string,
+    profile: any
+  ) => {
+    const cacheKey = `foundation_cache_${trigger}_${count}_${habitTitle || "gold"}`;
+    if (localStorage.getItem(cacheKey)) return; // Already cached
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Generate a short, powerful, personalized congratulation for a ${trigger} streak of ${count} days for the habit '${habitTitle}'. Keep it like a fortune cookie.`,
+          contextMode: "celebration",
+          profile,
+        }),
+      });
+      const json = await res.json();
+      if (json.reply) {
+        localStorage.setItem(cacheKey, json.reply);
+      }
+    } catch (e) {
+      console.error("Prefetch failed", e);
+    }
+  };
+
   const handleMoveFoundation = async (id: string, direction: "up" | "down") => {
     const index = foundations.findIndex((f) => f.id === id);
     if (index === -1) return;
@@ -465,6 +495,18 @@ export default function FoundationPage() {
 
       setShowCelebration(true);
       setCelebrationLoading(true);
+
+      // Check cache first
+      const cacheKey = `foundation_cache_${trigger}_${count}_${habitTitle || "gold"}`;
+      const cached = localStorage.getItem(cacheKey);
+
+      if (cached && !isFirstGold) {
+        setCelebrationMessage(cached);
+        setCelebrationLoading(false);
+        localStorage.removeItem(cacheKey); // Consume cache
+        return;
+      }
+
       try {
         const { data: auth } = await supabase.auth.getUser();
         const { data: profile } = await supabase
@@ -565,6 +607,43 @@ export default function FoundationPage() {
         allDone,
         newGoldStreak
       );
+
+      // --- Prefetch Logic ---
+      // 1. Check if we are 1 habit away from Gold Streak for TOMORROW (or next completion)
+      // Actually, user wants: "call when all but 1 are checked off".
+      // So if we just completed one, and now we have (Total - 1) done, we prefetch for the LAST one.
+      const completedCount = activeToday.filter((f) => {
+        const log = dayLogs.find((l) => l.foundation_id === f.id);
+        return log?.completed;
+      }).length;
+
+      if (completedCount === activeToday.length - 1) {
+        // We are 1 away from Gold.
+        // Calculate what the Gold Streak WOULD be if we finished the last one.
+        // We can reuse newGoldStreak logic but assume allDone = true.
+        // If today is NOT allDone yet (which it isn't, we are 1 away), computeGoldStreak returns streak up to yesterday.
+        // So the potential streak is current_gold_streak + 1.
+        const potentialGold = newGoldStreak + 1;
+        const goldMilestones = [1, 3, 7, 14, 30, 60, 90, 100, 365];
+
+        if (goldMilestones.includes(potentialGold)) {
+          // Prefetch Gold
+          supabase.from("profiles").select("*").eq("id", foundation.user_id).single().then(({ data }) => {
+            prefetchCelebration("gold", potentialGold, "", data);
+          });
+        }
+      }
+
+      // 2. Check if we are 1 day away from Habit Milestone
+      // User said: "complete 6th day, deliver on 7th".
+      // So if newStreak == milestone - 1, prefetch for milestone.
+      const habitMilestones = [3, 7, 14, 30, 60, 90, 100, 365];
+      const nextMilestone = habitMilestones.find(m => m === newStreak + 1);
+      if (nextMilestone) {
+        supabase.from("profiles").select("*").eq("id", foundation.user_id).single().then(({ data }) => {
+          prefetchCelebration("habit", nextMilestone, foundation.title, data);
+        });
+      }
     }
 
     // persist
