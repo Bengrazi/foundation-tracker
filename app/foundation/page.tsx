@@ -248,18 +248,26 @@ export default function FoundationPage() {
     // Fetch Daily Intention
     async function fetchIntention() {
       const today = format(new Date(), "yyyy-MM-dd");
+      console.log("Fetching intention for:", today);
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
+        if (!session) {
+          console.log("No session for intention fetch");
+          return;
+        }
 
         const res = await fetch(`/api/intention?date=${today}`, {
           headers: {
             Authorization: `Bearer ${session.access_token}`
           }
         });
+
         if (res.ok) {
           const data = await res.json();
+          console.log("Intention data:", data);
           setDailyIntention(data);
+        } else {
+          console.error("Intention fetch failed:", res.status);
         }
       } catch (e) {
         console.error("Failed to fetch intention", e);

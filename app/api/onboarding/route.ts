@@ -61,11 +61,22 @@ Ideology / worldview: ${ideology}
   });
 
   const raw = resp.choices[0]?.message?.content ?? "{}";
+  console.log("OpenAI Onboarding Raw:", raw);
+
   let json: any;
   try {
     json = JSON.parse(raw);
-  } catch {
+  } catch (e) {
+    console.error("JSON Parse Error:", e);
     json = {};
   }
+
+  // Ensure goals structure is flattened for DB
+  // The prompt asks for { "3y": [...], "1y": [...] }
+  // We need to return this structure to the client, but we might want to log if it's missing.
+  if (!json.goals) {
+    console.warn("No goals returned from AI");
+  }
+
   return NextResponse.json(json);
 }
