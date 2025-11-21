@@ -1,7 +1,7 @@
 "use client";
 
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
-import { ChatWidget } from "@/components/ChatWidget";
+
 import { GoalsWidget } from "@/components/GoalsWidget";
 
 export default function PlanPage() {
@@ -10,7 +10,7 @@ export default function PlanPage() {
             <AuthGuardHeader />
 
             <main className="mx-auto max-w-md px-4 pb-28 pt-4">
-                <ChatWidget />
+
                 <GoalsWidget />
             </main>
         </div>

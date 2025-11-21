@@ -34,6 +34,7 @@ You are a pragmatic, optimistic planner. Output must be a SINGLE JSON object wit
    - "role": 2–5 words.
    - "why": one short sentence.
 - "goals": Output EXACTLY 3 goals TOTAL across all horizons. Do not fill every horizon if not needed. Just place the 3 most high-impact goals in their appropriate timeframes.
+   - The structure MUST be: { "3y": [...], "1y": [...], "6m": [...], "1m": [...] }
    - Each "title" must be a concise sentence fragment (ideally 6–12 words, max 15).
    - Goals should be realistic but ambitious, clearly helping toward the implied 10-year picture.
 - "keyTruth": 1 short guiding belief sentence (max ~15 words).
@@ -41,6 +42,7 @@ You are a pragmatic, optimistic planner. Output must be a SINGLE JSON object wit
 
 Keep the JSON compact and valid. No extra commentary, no markdown, no trailing commas.
 `;
+
 
   const user = `
 Priorities (ranked): ${priorities}

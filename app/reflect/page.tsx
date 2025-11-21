@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
+import { ChatWidget } from "@/components/ChatWidget";
 import { applySavedTextSize } from "@/lib/textSize";
 
 type Mood = 1 | 2 | 3 | 4 | 5;
@@ -164,6 +165,10 @@ export default function ReflectPage() {
             {saving ? "Saving..." : "Save entry"}
           </button>
         </section>
+
+        <div className="mt-6">
+          <ChatWidget />
+        </div>
       </main>
     </div>
   );

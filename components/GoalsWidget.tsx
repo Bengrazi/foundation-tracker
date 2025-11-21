@@ -275,7 +275,11 @@ export function GoalsWidget() {
                         value={newStatus}
                         onChange={(e) => setNewStatus(e.target.value as GoalStatus)}
                         className="mt-1 block w-full rounded bg-app-input border border-app-border px-2 py-1 text-app-main"
-                    />
+                    >
+                        <option value="not_started">Not started</option>
+                        <option value="in_progress">In progress</option>
+                        <option value="achieved">Achieved</option>
+                    </select>
 
                     <button
                         onClick={createGoal}

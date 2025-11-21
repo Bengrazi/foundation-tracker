@@ -792,6 +792,7 @@ export default function FoundationPage() {
 
       if (typeof window !== "undefined") {
         window.localStorage.setItem(ONBOARDING_KEY, "1");
+        window.location.reload();
       }
 
       setShowOnboarding(false);
