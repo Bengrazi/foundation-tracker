@@ -477,7 +477,7 @@ export default function FoundationPage() {
     }
 
     // If not gold, check standard habit streak
-    if (!trigger && habitMilestones.includes(newStreak) && stdCount < 1) {
+    if (!trigger && habitMilestones.includes(newStreak) && stdCount < 5) {
       trigger = "habit";
       count = newStreak;
     }
