@@ -830,7 +830,16 @@ export default function FoundationPage() {
 
       <main className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-24 pt-2">
         {/* Daily Intention */}
-        {dailyIntention && <DailyIntentionCard intention={dailyIntention} />}
+        {dailyIntention ? (
+          <DailyIntentionCard intention={dailyIntention} />
+        ) : (
+          <div className="mb-4 rounded-2xl border border-app-border bg-app-card p-4 text-center">
+            <p className="text-xs text-app-muted">Daily Intention</p>
+            <p className="mt-1 text-sm font-medium text-app-main italic">
+              "Focus on the step in front of you."
+            </p>
+          </div>
+        )}
 
         {/* Date header */}
         <section className="mt-2 flex items-center justify-between">
@@ -969,7 +978,9 @@ export default function FoundationPage() {
                       type="button"
                       onClick={() => handleToggleFoundation(f)}
                       className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border transition-colors ${completed
-                        ? "border-app-accent bg-app-accent text-app-accent-text"
+                        ? allDone
+                          ? "border-yellow-500 bg-yellow-500 text-app-main"
+                          : "border-app-accent bg-app-accent text-app-accent-text"
                         : "border-app-border bg-app-input text-app-muted"
                         }`}
                     >
