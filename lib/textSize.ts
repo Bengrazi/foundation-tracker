@@ -1,5 +1,7 @@
 // lib/textSize.ts
 
+import { supabase } from "./supabaseClient";
+
 export type TextSize = "small" | "medium" | "large" | "xl";
 
 export const TEXT_SIZE_KEY = "foundation_ui_text_size_v1";
@@ -24,9 +26,18 @@ export function applySavedTextSize() {
 /**
  * Update text size and persist to localStorage.
  */
-export function setTextSize(size: TextSize) {
+export async function setTextSize(size: TextSize) {
   if (typeof window === "undefined") return;
 
   window.localStorage.setItem(TEXT_SIZE_KEY, size);
   document.documentElement.dataset.textSize = size;
+
+  // Persist to DB if logged in
+  const { data: auth } = await supabase.auth.getUser();
+  if (auth?.user) {
+    await supabase
+      .from("profiles")
+      .update({ text_size: size })
+      .eq("id", auth.user.id);
+  }
 }

@@ -1,3 +1,5 @@
+import { supabase } from "./supabaseClient";
+
 export type Theme = "dark" | "light" | "sunrise";
 
 export function applySavedTheme() {
@@ -6,8 +8,17 @@ export function applySavedTheme() {
     document.documentElement.setAttribute("data-theme", theme);
 }
 
-export function setTheme(theme: Theme) {
+export async function setTheme(theme: Theme) {
     if (typeof window === "undefined") return;
     localStorage.setItem("foundation_theme", theme);
     document.documentElement.setAttribute("data-theme", theme);
+
+    // Persist to DB if logged in
+    const { data: auth } = await supabase.auth.getUser();
+    if (auth?.user) {
+        await supabase
+            .from("profiles")
+            .update({ theme })
+            .eq("id", auth.user.id);
+    }
 }

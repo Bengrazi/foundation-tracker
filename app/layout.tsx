@@ -11,6 +11,8 @@ export const metadata: Metadata = {
   description: "Daily foundations, reflections, and AI insights.",
 };
 
+import { SettingsSync } from "@/components/SettingsSync";
+
 export default function RootLayout({
   children,
 }: {
@@ -41,7 +43,7 @@ export default function RootLayout({
                   if (saved) {
                     document.documentElement.setAttribute('data-theme', saved);
                   }
-                  var savedSize = localStorage.getItem('foundation_text_size');
+                  var savedSize = localStorage.getItem('foundation_ui_text_size_v1');
                   if (savedSize) {
                     document.documentElement.setAttribute('data-text-size', savedSize);
                   }
@@ -50,6 +52,7 @@ export default function RootLayout({
             `,
           }}
         />
+        <SettingsSync />
         <div className="flex min-h-screen justify-center bg-app-main">
           <div className="flex w-full max-w-md flex-col pb-16">
             <main className="flex-1 bg-app-main px-4 pt-4">{children}</main>

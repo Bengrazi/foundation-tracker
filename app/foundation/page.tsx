@@ -192,11 +192,6 @@ const DEFAULT_FOUNDATIONS: Omit<Foundation, "id" | "start_date" | "end_date" | "
       schedule_type: "daily",
       x_per_week: null,
     },
-    {
-      title: "Breathing exercises",
-      schedule_type: "daily",
-      x_per_week: null,
-    },
   ];
 
 // ------------- Component -------------
@@ -418,35 +413,55 @@ export default function FoundationPage() {
     goldStreak: number
   ) => {
     // Milestones
-    const goldMilestones = [7, 30, 69, 100, 365];
-    const habitMilestones = [7, 30, 69, 100, 365];
+    const goldMilestones = [1, 3, 7, 14, 30, 60, 90, 100, 365];
+    const habitMilestones = [3, 7, 14, 30, 60, 90, 100, 365];
 
     // Check settings
     const savedCoach = localStorage.getItem("foundation_ai_coach_enabled");
     if (savedCoach === "false") return;
 
-    // Check daily limit
     const today = new Date().toDateString();
-    const dailyKey = `foundation_celebration_count_${today}`;
-    const dailyCount = parseInt(localStorage.getItem(dailyKey) || "0", 10);
+    const goldKey = `foundation_celebration_gold_${today}`;
+    const stdKey = `foundation_celebration_std_${today}`;
+    const firstGoldKey = "foundation_first_gold_celebration_shown";
 
-    if (dailyCount >= 2) return;
+    const goldCount = parseInt(localStorage.getItem(goldKey) || "0", 10);
+    const stdCount = parseInt(localStorage.getItem(stdKey) || "0", 10);
 
     let trigger = "";
     let count = 0;
+    let isFirstGold = false;
 
-    // Prioritize Gold Streak
-    if (allDone && goldMilestones.includes(goldStreak)) {
-      trigger = "gold";
-      count = goldStreak;
-    } else if (habitMilestones.includes(newStreak)) {
+    // Check Gold Streak
+    if (allDone) {
+      // Special case: First ever gold streak (or just first time seeing the note)
+      const firstGoldShown = localStorage.getItem(firstGoldKey);
+      if (!firstGoldShown) {
+        trigger = "gold";
+        count = goldStreak;
+        isFirstGold = true;
+      } else if (goldMilestones.includes(goldStreak) && goldCount < 1) {
+        trigger = "gold";
+        count = goldStreak;
+      }
+    }
+
+    // If not gold, check standard habit streak
+    if (!trigger && habitMilestones.includes(newStreak) && stdCount < 1) {
       trigger = "habit";
       count = newStreak;
     }
 
     if (trigger) {
-      // Increment daily count
-      localStorage.setItem(dailyKey, String(dailyCount + 1));
+      // Update limits
+      if (trigger === "gold") {
+        localStorage.setItem(goldKey, String(goldCount + 1));
+        if (isFirstGold) {
+          localStorage.setItem(firstGoldKey, "true");
+        }
+      } else {
+        localStorage.setItem(stdKey, String(stdCount + 1));
+      }
 
       setShowCelebration(true);
       setCelebrationLoading(true);
@@ -458,11 +473,21 @@ export default function FoundationPage() {
           .eq("id", auth.user?.id)
           .single();
 
+        let prompt = "";
+        if (isFirstGold) {
+          prompt = `This is the user's FIRST EVER Gold Streak (completing all daily habits). 
+          Generate a celebratory note (max 2 sentences). 
+          Explain that these notes will pop up to celebrate their consistency and are editable in settings. 
+          Congratulate them on this first perfect day.`;
+        } else {
+          prompt = `Generate a short, powerful, personalized congratulation for a ${trigger} streak of ${count} days for the habit '${habitTitle}'. Keep it like a fortune cookie.`;
+        }
+
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message: `Generate a short, powerful, personalized congratulation for a ${trigger} streak of ${count} days for the habit '${habitTitle}'.`,
+            message: prompt,
             contextMode: "celebration",
             profile,
           }),

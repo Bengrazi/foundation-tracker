@@ -16,7 +16,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-1/2 z-30 w-full max-w-md -translate-x-1/2 bg-gradient-to-t from-app-main via-app-main/80 to-transparent pb-3">
-      <div className="mx-auto flex w-[92%] items-center justify-between rounded-full border border-app-border bg-app-card/95 px-3 py-1.5 text-[11px] shadow-lg shadow-black/40">
+      <div className="mx-auto flex w-[92%] items-center justify-between rounded-full border border-app-border bg-app-card px-3 py-2 text-xs shadow-lg shadow-black/40">
         {tabs.map((tab) => {
           const active = pathname === tab.href;
           return (

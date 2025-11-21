@@ -67,6 +67,30 @@ export default function SettingsPage() {
       const savedTheme = localStorage.getItem("foundation_theme") as Theme | null;
       if (savedTheme) setThemeState(savedTheme);
     }
+
+    // Sync from DB
+    const syncSettings = async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("theme, text_size")
+        .eq("id", auth.user.id)
+        .single();
+
+      if (profile) {
+        if (profile.theme) {
+          setTheme(profile.theme as Theme);
+          setThemeState(profile.theme as Theme);
+        }
+        if (profile.text_size) {
+          setTextSize(profile.text_size as TextSize);
+          setTextSizeState(profile.text_size as TextSize);
+        }
+      }
+    };
+    syncSettings();
   }, []);
 
   const handleAiCoachToggle = (enabled: boolean) => {
