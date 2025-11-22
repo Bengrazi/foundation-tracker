@@ -394,7 +394,8 @@ export default function FoundationPage() {
     habitTitle: string,
     newStreak: number,
     allDone: boolean,
-    goldStreak: number
+    goldStreak: number,
+    selectedDate: string
   ) => {
     const goldMilestones = [1, 3, 7, 14, 30, 60, 90, 100, 365];
     const habitMilestones = [7, 30, 60, 90, 100, 365];
@@ -402,13 +403,15 @@ export default function FoundationPage() {
     const savedCoach = localStorage.getItem("foundation_ai_coach_enabled");
     if (savedCoach === "false") return;
 
-    const today = new Date().toDateString();
-    const goldKey = `foundation_celebration_gold_${today}`;
-    const stdKey = `foundation_celebration_std_${today}`;
+    const goldKey = `foundation_celebration_gold_${selectedDate}`;
+    const stdKey = `foundation_celebration_std_${selectedDate}`;
     const firstGoldKey = "foundation_first_gold_celebration_shown";
 
     const goldCount = parseInt(localStorage.getItem(goldKey) || "0", 10);
     const stdCount = parseInt(localStorage.getItem(stdKey) || "0", 10);
+
+    console.log(`[Celebration Check] Date: ${selectedDate}, Gold: ${goldStreak}, Habit: ${newStreak}, AllDone: ${allDone}`);
+    console.log(`[Celebration Limits] Gold shown on ${selectedDate}: ${goldCount}, Habit shown on ${selectedDate}: ${stdCount}`);
 
     let trigger = "";
     let count = 0;
@@ -435,6 +438,8 @@ export default function FoundationPage() {
     }
 
     if (trigger) {
+      console.log(`[Celebration Triggered] Type: ${trigger}, Count: ${count}, Date: ${selectedDate}`);
+
       // Update limits
       if (trigger === "gold_streak") {
         localStorage.setItem(goldKey, String(goldCount + 1));
@@ -468,6 +473,8 @@ export default function FoundationPage() {
           const data = await res.json();
           setCelebrationMessage(data.message);
           setShowCelebration(true);
+        } else {
+          console.error("[Celebration Error] API returned:", res.status);
         }
       } catch (e) {
         console.error("Failed to fetch celebration", e);
@@ -559,7 +566,8 @@ export default function FoundationPage() {
         foundation.title,
         newStreak,
         allDone,
-        newGoldStreak
+        newGoldStreak,
+        selectedDate
       );
     }
 

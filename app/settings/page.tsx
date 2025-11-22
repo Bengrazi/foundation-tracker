@@ -233,6 +233,16 @@ export default function SettingsPage() {
       // Do NOT sign out. Just clear onboarding flag so they see questions again.
       window.localStorage.removeItem(ONBOARDING_KEY);
 
+      // Clear celebration flags so first gold celebration shows again
+      window.localStorage.removeItem("foundation_first_gold_celebration_shown");
+
+      // Clear all date-specific celebration limits
+      Object.keys(window.localStorage).forEach(key => {
+        if (key.startsWith("foundation_celebration_")) {
+          window.localStorage.removeItem(key);
+        }
+      });
+
       // Send them back to Foundation; onboarding modal will appear again.
       router.push("/foundation");
     } finally {
