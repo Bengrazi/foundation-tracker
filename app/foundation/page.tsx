@@ -274,7 +274,7 @@ export default function FoundationPage() {
     // Fetch Daily Intention
     async function fetchIntention(force = false) {
       const today = format(new Date(), "yyyy-MM-dd");
-      console.log("Fetching intention for:", today);
+      console.log("Fetching intention for:", today, "Force:", force);
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
@@ -291,7 +291,7 @@ export default function FoundationPage() {
 
         if (res.ok) {
           const data = await res.json();
-          console.log("Intention data:", data);
+          console.log("Intention data received:", data);
           setDailyIntention(data);
         } else {
           console.error("Intention fetch failed:", res.status);
@@ -877,9 +877,6 @@ export default function FoundationPage() {
             <div className="text-xl font-semibold text-app-main">
               {format(parseISO(selectedDate), "EEEE, MMM d")}
             </div>
-            <div className="text-xs text-app-muted">
-              {habitsDoneToday}/{foundations.length} habits today
-            </div>
           </div>
 
           <div className="text-right">
@@ -911,9 +908,14 @@ export default function FoundationPage() {
         {/* Foundations list */}
         <section>
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold tracking-wide text-app-muted uppercase">
-              Daily habits
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-semibold tracking-wide text-app-muted uppercase">
+                Daily habits
+              </h2>
+              <span className="text-[10px] text-app-muted bg-app-card px-2 py-0.5 rounded-full border border-app-border">
+                {habitsDoneToday}/{foundations.length} done
+              </span>
+            </div>
             <button
               onClick={() => setShowNewHabitForm(!showNewHabitForm)}
               className="text-[11px] text-app-accent-color hover:text-app-accent-hover"
