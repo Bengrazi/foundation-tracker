@@ -298,10 +298,13 @@ export default function FoundationPage() {
         console.log("Intention data received:", data);
         setDailyIntention(data);
       } else {
-        console.error("Intention fetch failed:", res.status);
+        const errData = await res.json().catch(() => ({}));
+        console.error("Intention fetch failed:", res.status, errData.error || res.statusText);
+        alert(`Debug Error: ${errData.error || "Unknown API Error"}`);
       }
     } catch (e) {
       console.error("Failed to fetch intention", e);
+      alert(`Debug Network Error: ${e}`);
     }
   }
 
