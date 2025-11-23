@@ -70,6 +70,8 @@ export async function GET(req: Request) {
     }
 
     // 2. If not, generate one
+    console.log("[API] Generating new intention for user:", user.id);
+
     // Fetch context (goals, habits, etc.) - simplified for now
     const { data: profile } = await supabase
       .from("profiles")
@@ -101,6 +103,7 @@ Goals: ${goalsText}
 Core Truth: ${profileText}
 `;
 
+    console.log("[API] Calling OpenAI...");
     const openai = getOpenAIClient();
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -108,6 +111,7 @@ Core Truth: ${profileText}
     });
 
     const content = completion.choices[0]?.message?.content?.trim() ?? "Focus on the present moment.";
+    console.log("[API] OpenAI response received:", content);
 
     // 3. Save to DB
     const { data: newIntention, error: insertError } = await supabase
@@ -121,7 +125,7 @@ Core Truth: ${profileText}
       .single();
 
     if (insertError) {
-      console.error("Error saving intention:", insertError);
+      console.error("[API] Error saving intention:", insertError);
       return NextResponse.json({ error: "Failed to save intention" }, { status: 500 });
     }
 
