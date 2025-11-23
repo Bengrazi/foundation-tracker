@@ -57,8 +57,17 @@ export async function GET(req: Request) {
     .eq("date", date)
     .single();
 
-  if (existing) {
+  const force = searchParams.get("force") === "true";
+
+  if (existing && !force) {
     return NextResponse.json(existing);
+  }
+
+  if (existing && force) {
+    await supabase
+      .from("daily_intentions")
+      .delete()
+      .eq("id", existing.id);
   }
 
   // 2. If not, generate one

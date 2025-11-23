@@ -11,8 +11,13 @@ export function DailyIntentionCard({ intention: initialIntention }: Props) {
     const [intention, setIntention] = useState(initialIntention);
     const [voting, setVoting] = useState(false);
 
+    // Update local state if prop changes (e.g. after refresh)
+    if (initialIntention.id !== intention.id && initialIntention.content !== intention.content) {
+        setIntention(initialIntention);
+    }
+
     async function handleVote(vote: "up" | "down") {
-        if (voting || intention.vote === vote) return;
+        if (voting || intention.vote === vote || intention.id === "default") return;
 
         // Optimistic update
         const previousVote = intention.vote;
@@ -43,7 +48,7 @@ export function DailyIntentionCard({ intention: initialIntention }: Props) {
     }
 
     return (
-        <div className="mb-6 rounded-2xl border border-app-border bg-app-card p-5 text-center shadow-sm">
+        <div className="mb-6 rounded-2xl border border-app-border bg-app-card p-5 text-center shadow-sm relative group">
             <h3 className="mb-2 text-[10px] font-bold uppercase tracking-wider text-app-muted">
                 Daily Intention
             </h3>
@@ -57,8 +62,8 @@ export function DailyIntentionCard({ intention: initialIntention }: Props) {
                     className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${intention.vote === "up"
                         ? "bg-green-500/20 text-green-500"
                         : "bg-app-input text-app-muted hover:bg-app-border hover:text-app-main"
-                        }`}
-                    disabled={voting}
+                        } ${intention.id === "default" ? "opacity-50 cursor-not-allowed" : ""}`}
+                    disabled={voting || intention.id === "default"}
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -74,8 +79,8 @@ export function DailyIntentionCard({ intention: initialIntention }: Props) {
                     className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${intention.vote === "down"
                         ? "bg-red-500/20 text-red-500"
                         : "bg-app-input text-app-muted hover:bg-app-border hover:text-app-main"
-                        }`}
-                    disabled={voting}
+                        } ${intention.id === "default" ? "opacity-50 cursor-not-allowed" : ""}`}
+                    disabled={voting || intention.id === "default"}
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"

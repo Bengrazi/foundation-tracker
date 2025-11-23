@@ -218,6 +218,15 @@ export default function FoundationPage() {
 
   const [dailyIntention, setDailyIntention] = useState<DailyIntention | null>(null);
 
+  const DEFAULT_INTENTION: DailyIntention = {
+    id: "default",
+    user_id: "system",
+    date: format(new Date(), "yyyy-MM-dd"),
+    content: "Focus on the step in front of you.",
+    vote: null,
+    created_at: new Date().toISOString()
+  };
+
   useEffect(() => {
     applySavedTextSize();
     applySavedTheme();
@@ -263,7 +272,7 @@ export default function FoundationPage() {
     triggerPrecompute();
 
     // Fetch Daily Intention
-    async function fetchIntention() {
+    async function fetchIntention(force = false) {
       const today = format(new Date(), "yyyy-MM-dd");
       console.log("Fetching intention for:", today);
       try {
@@ -273,10 +282,11 @@ export default function FoundationPage() {
           return;
         }
 
-        const res = await fetch(`/api/intention?date=${today}`, {
+        const res = await fetch(`/api/intention?date=${today}${force ? "&force=true" : ""}`, {
           headers: {
             Authorization: `Bearer ${session.access_token}`
-          }
+          },
+          cache: "no-store"
         });
 
         if (res.ok) {
@@ -290,8 +300,9 @@ export default function FoundationPage() {
         console.error("Failed to fetch intention", e);
       }
     }
+
     fetchIntention();
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -881,23 +892,21 @@ export default function FoundationPage() {
               onChange={(e) => setSelectedDate(e.target.value)}
               className="mt-1 rounded-full border border-app-border bg-app-card px-3 py-1 text-xs text-app-main outline-none focus:border-app-accent"
             />
-            <div className="mt-1 text-[11px] text-app-accent-color font-medium">
-              Gold streak: {goldStreak} {goldStreak === 1 ? "day" : "days"}
-            </div>
           </div>
         </section>
 
         {/* Daily Intention */}
-        {dailyIntention ? (
-          <DailyIntentionCard intention={dailyIntention} />
-        ) : (
-          <div className="mb-4 rounded-2xl border border-app-border bg-app-card p-4 text-center">
-            <p className="text-xs text-app-muted">Daily Intention</p>
-            <p className="mt-1 text-sm font-medium text-app-main italic">
-              "Focus on the step in front of you."
-            </p>
+        <DailyIntentionCard
+          intention={dailyIntention || DEFAULT_INTENTION}
+        />
+
+        {/* Gold Streak Display */}
+        <div className="mb-2 flex justify-center">
+          <div className="inline-flex items-center gap-2 rounded-full bg-yellow-500/10 px-4 py-1.5 text-xs font-semibold text-yellow-500 ring-1 ring-inset ring-yellow-500/20">
+            <span>🏆</span>
+            <span>Gold Streak: {goldStreak} {goldStreak === 1 ? "day" : "days"}</span>
           </div>
-        )}
+        </div>
 
         {/* Foundations list */}
         <section>
