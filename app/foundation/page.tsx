@@ -217,6 +217,7 @@ export default function FoundationPage() {
   const [savingOnboarding, setSavingOnboarding] = useState(false);
 
   const [dailyIntention, setDailyIntention] = useState<DailyIntention | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<string>("");
 
   const DEFAULT_INTENTION: DailyIntention = {
     id: "default",
@@ -297,6 +298,31 @@ export default function FoundationPage() {
       console.error("Failed to fetch intention", e);
     }
   }
+
+  // Countdown timer - updates every minute
+  useEffect(() => {
+    const calculateTimeRemaining = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0); // Next midnight
+
+      const diff = midnight.getTime() - now.getTime();
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+      return `${hours}h ${minutes}m`;
+    };
+
+    // Initial calculation
+    setTimeRemaining(calculateTimeRemaining());
+
+    // Update every minute
+    const interval = setInterval(() => {
+      setTimeRemaining(calculateTimeRemaining());
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -887,8 +913,9 @@ export default function FoundationPage() {
         </section>
 
         {/* Daily Intention */}
-        <DailyIntentionCard 
-          intention={dailyIntention || DEFAULT_INTENTION} 
+        <DailyIntentionCard
+          intention={dailyIntention || DEFAULT_INTENTION}
+          timeRemaining={timeRemaining}
         />
 
         {/* Gold Streak Display */}

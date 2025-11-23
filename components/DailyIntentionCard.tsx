@@ -5,9 +5,10 @@ import { DailyIntention } from "@/lib/engagementTypes";
 
 interface Props {
     intention: DailyIntention;
+    timeRemaining?: string;
 }
 
-export function DailyIntentionCard({ intention: initialIntention }: Props) {
+export function DailyIntentionCard({ intention: initialIntention, timeRemaining }: Props) {
     const [intention, setIntention] = useState(initialIntention);
 
     // Update local state if prop changes (e.g. after refresh)
@@ -23,6 +24,12 @@ export function DailyIntentionCard({ intention: initialIntention }: Props) {
             <p className="mb-4 text-sm font-medium leading-relaxed text-app-main font-serif italic">
                 “{intention.content}”
             </p>
+            {timeRemaining && (
+                <div className="text-[11px] text-app-muted/80 flex items-center justify-center gap-1.5">
+                    <span className="text-app-accent-color">⏱</span>
+                    <span>{timeRemaining} remaining to conquer today</span>
+                </div>
+            )}
         </div>
     );
 }

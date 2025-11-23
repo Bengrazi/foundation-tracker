@@ -26,6 +26,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date");
     const force = searchParams.get("force") === "true";
+    const prevDayContext = searchParams.get("prev_day_context");
 
     if (!date) {
       return NextResponse.json({ error: "Date required" }, { status: 400 });
@@ -72,6 +73,17 @@ export async function GET(req: Request) {
     const goalsText = goals?.map((g: any) => g.title).join(", ") ?? "No specific goals";
     const profileText = profile ? `Key Truth: ${profile.key_truth}` : "";
 
+    // Build context-aware prompt
+    let contextSection = "";
+    if (prevDayContext) {
+      try {
+        const context = JSON.parse(prevDayContext);
+        contextSection = `\n\nYesterday's Performance:\n- Habits completed: ${context.habitsCompleted}/${context.habitsTotal}\n- Gold streak: ${context.goldStreak ? "Maintained ✓" : "Broken"}\n- Journal entry: ${context.journalSubmitted ? "Yes ✓" : "No"}\n\n${context.goldStreak && context.journalSubmitted ? "They're CRUSHING IT. Reinforce momentum with urgency." : context.habitsCompleted === 0 ? "They need support. Motivate with compassion and challenge." : "Mixed performance. Push them to complete everything today."}\n`;
+      } catch (e) {
+        console.error("Failed to parse prev_day_context:", e);
+      }
+    }
+
     const systemPrompt = `
 You are Daily Tracker AI, an elite mindset coach.
 Generate a powerful, iconic Daily Intention for ${date}.
@@ -84,7 +96,7 @@ Constraints:
 
 User Context:
 Goals: ${goalsText}
-Core Truth: ${profileText}
+Core Truth: ${profileText}${contextSection}
 
 Examples of good length:
 "Execute relentlessly. No excuses. You define greatness today."
