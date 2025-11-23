@@ -202,7 +202,7 @@ export function GoalsWidget() {
 
                     <button
                         onClick={() => deleteGoal(goal.id)}
-                        className="text-red-400 hover:text-red-300 text-[10px] whitespace-nowrap px-2 py-1 rounded border border-red-900/30 bg-red-950/20"
+                        className="text-red-400/60 hover:text-red-400 text-[10px] whitespace-nowrap px-1"
                     >
                         Delete
                     </button>
