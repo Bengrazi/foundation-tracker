@@ -271,39 +271,39 @@ export default function FoundationPage() {
     };
     triggerPrecompute();
 
-    // Fetch Daily Intention
-    async function fetchIntention(force = false) {
-      const today = format(new Date(), "yyyy-MM-dd");
-      console.log(`[Client] Fetching intention. Selected: ${selectedDate}, Today: ${today}, Force: ${force}`);
-
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          console.log("No session for intention fetch");
-          return;
-        }
-
-        const res = await fetch(`/api/intention?date=${today}${force ? "&force=true" : ""}`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`
-          },
-          cache: "no-store"
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          console.log("Intention data received:", data);
-          setDailyIntention(data);
-        } else {
-          console.error("Intention fetch failed:", res.status);
-        }
-      } catch (e) {
-        console.error("Failed to fetch intention", e);
-      }
-    }
-
     fetchIntention();
   }, [selectedDate]);
+
+  // Fetch Daily Intention
+  async function fetchIntention(force = false) {
+    const today = format(new Date(), "yyyy-MM-dd");
+    console.log(`[Client] Fetching intention. Selected: ${selectedDate}, Today: ${today}, Force: ${force}`);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.log("No session for intention fetch");
+        return;
+      }
+
+      const res = await fetch(`/api/intention?date=${today}${force ? "&force=true" : ""}`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        },
+        cache: "no-store"
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        console.log("Intention data received:", data);
+        setDailyIntention(data);
+      } else {
+        console.error("Intention fetch failed:", res.status);
+      }
+    } catch (e) {
+      console.error("Failed to fetch intention", e);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
