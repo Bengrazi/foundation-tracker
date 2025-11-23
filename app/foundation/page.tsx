@@ -277,14 +277,10 @@ export default function FoundationPage() {
   // Fetch Daily Intention
   async function fetchIntention(force = false) {
     const today = format(new Date(), "yyyy-MM-dd");
-    console.log(`[Client] Fetching intention. Selected: ${selectedDate}, Today: ${today}, Force: ${force}`);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        console.log("No session for intention fetch");
-        return;
-      }
+      if (!session) return;
 
       const res = await fetch(`/api/intention?date=${today}${force ? "&force=true" : ""}`, {
         headers: {
@@ -295,16 +291,10 @@ export default function FoundationPage() {
 
       if (res.ok) {
         const data = await res.json();
-        console.log("Intention data received:", data);
         setDailyIntention(data);
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        console.error("Intention fetch failed:", res.status, errData.error || res.statusText);
-        alert(`Debug Error: ${errData.error || "Unknown API Error"}`);
       }
     } catch (e) {
       console.error("Failed to fetch intention", e);
-      alert(`Debug Network Error: ${e}`);
     }
   }
 
@@ -897,11 +887,9 @@ export default function FoundationPage() {
         </section>
 
         {/* Daily Intention */}
-        <div onClick={() => fetchIntention(true)} title="Debug: Force Refresh" className="cursor-pointer">
-          <DailyIntentionCard
-            intention={dailyIntention || DEFAULT_INTENTION}
-          />
-        </div>
+        <DailyIntentionCard 
+          intention={dailyIntention || DEFAULT_INTENTION} 
+        />
 
         {/* Gold Streak Display */}
         <div className="mb-2 flex justify-center">
@@ -1079,7 +1067,7 @@ export default function FoundationPage() {
                         ) : (
                           <button
                             onClick={() => handleDeleteFoundationFromTodayForward(f)}
-                            className="text-[10px] text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-900/30 bg-red-950/20"
+                            className="text-[10px] text-red-400/60 hover:text-red-400 px-1"
                           >
                             Remove
                           </button>
@@ -1094,7 +1082,7 @@ export default function FoundationPage() {
                       value={log?.notes ?? ""}
                       onChange={(e) => handleNotesChange(f, e.target.value)}
                       placeholder="Notes..."
-                      className="w-full resize-none rounded bg-transparent text-xs text-app-muted placeholder-app-muted/50 outline-none"
+                      className="w-full resize-none rounded bg-app-card-hover/30 px-2 py-1 text-xs text-app-muted placeholder-app-muted/50 outline-none focus:bg-app-card-hover/50 border border-transparent focus:border-app-border/30"
                       rows={1}
                       style={{ minHeight: "1.5em" }}
                     />
