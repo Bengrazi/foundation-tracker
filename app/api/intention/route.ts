@@ -22,69 +22,70 @@ function getSupabaseClient(req: Request) {
 }
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const date = searchParams.get("date"); // YYYY-MM-DD from client
-  const force = searchParams.get("force") === "true";
+  try {
+    const { searchParams } = new URL(req.url);
+    const date = searchParams.get("date"); // YYYY-MM-DD from client
+    const force = searchParams.get("force") === "true";
 
-  console.log(`[API] GET /api/intention - Date: ${date}, Force: ${force}`);
+    console.log(`[API] GET /api/intention - Date: ${date}, Force: ${force}`);
 
-  if (!date) {
-    console.error("[API] Missing date parameter");
-    return NextResponse.json({ error: "Date required" }, { status: 400 });
-  }
+    if (!date) {
+      console.error("[API] Missing date parameter");
+      return NextResponse.json({ error: "Date required" }, { status: 400 });
+    }
 
-  const supabase = getSupabaseClient(req);
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const supabase = getSupabaseClient(req);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  if (authError || !user) {
-    console.error("[API] Unauthorized access attempt");
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+    if (authError || !user) {
+      console.error("[API] Unauthorized access attempt", authError);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  // 1. Check if intention exists
-  const { data: existing, error: fetchError } = await supabase
-    .from("daily_intentions")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("date", date)
-    .single();
-
-  if (fetchError && fetchError.code !== 'PGRST116') {
-    console.error("[API] Error fetching intention:", fetchError);
-  }
-
-  if (existing && !force) {
-    console.log("[API] Returning existing intention:", existing.id);
-    return NextResponse.json(existing);
-  }
-
-  if (existing && force) {
-    console.log("[API] Force refresh: Deleting existing intention:", existing.id);
-    await supabase
+    // 1. Check if intention exists
+    const { data: existing, error: fetchError } = await supabase
       .from("daily_intentions")
-      .delete()
-      .eq("id", existing.id);
-  } else {
-    console.log("[API] No existing intention found (or force=true), generating new one.");
-  }
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("date", date)
+      .single();
 
-  // 2. If not, generate one
-  // Fetch context (goals, habits, etc.) - simplified for now
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error("[API] Error fetching intention:", fetchError);
+    }
 
-  const { data: goals } = await supabase
-    .from("goals")
-    .select("title")
-    .eq("user_id", user.id);
+    if (existing && !force) {
+      console.log("[API] Returning existing intention:", existing.id);
+      return NextResponse.json(existing);
+    }
 
-  const goalsText = goals?.map((g: any) => g.title).join(", ") ?? "No specific goals";
-  const profileText = profile ? `Key Truth: ${profile.key_truth}` : "";
+    if (existing && force) {
+      console.log("[API] Force refresh: Deleting existing intention:", existing.id);
+      await supabase
+        .from("daily_intentions")
+        .delete()
+        .eq("id", existing.id);
+    } else {
+      console.log("[API] No existing intention found (or force=true), generating new one.");
+    }
 
-  const systemPrompt = `
+    // 2. If not, generate one
+    // Fetch context (goals, habits, etc.) - simplified for now
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+
+    const { data: goals } = await supabase
+      .from("goals")
+      .select("title")
+      .eq("user_id", user.id);
+
+    const goalsText = goals?.map((g: any) => g.title).join(", ") ?? "No specific goals";
+    const profileText = profile ? `Key Truth: ${profile.key_truth}` : "";
+
+    const systemPrompt = `
 You are Daily Tracker AI, an elite mindset coach.
 Generate a powerful, iconic Daily Intention for ${date}.
 This is not advice—it is a directive for greatness.
@@ -100,46 +101,55 @@ Goals: ${goalsText}
 Core Truth: ${profileText}
 `;
 
-  const openai = getOpenAIClient();
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [{ role: "system", content: systemPrompt }],
-  });
+    const openai = getOpenAIClient();
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [{ role: "system", content: systemPrompt }],
+    });
 
-  const content = completion.choices[0]?.message?.content?.trim() ?? "Focus on the present moment.";
+    const content = completion.choices[0]?.message?.content?.trim() ?? "Focus on the present moment.";
 
-  // 3. Save to DB
-  const { data: newIntention, error: insertError } = await supabase
-    .from("daily_intentions")
-    .insert({
-      user_id: user.id,
-      date,
-      content,
-    })
-    .select("*")
-    .single();
+    // 3. Save to DB
+    const { data: newIntention, error: insertError } = await supabase
+      .from("daily_intentions")
+      .insert({
+        user_id: user.id,
+        date,
+        content,
+      })
+      .select("*")
+      .single();
 
-  if (insertError) {
-    console.error("Error saving intention:", insertError);
-    return NextResponse.json({ error: "Failed to save intention" }, { status: 500 });
+    if (insertError) {
+      console.error("Error saving intention:", insertError);
+      return NextResponse.json({ error: "Failed to save intention" }, { status: 500 });
+    }
+
+    console.log("[API] Generated and saved new intention:", newIntention.id);
+    return NextResponse.json(newIntention);
+  } catch (error: any) {
+    console.error("[API] Unhandled error in GET /api/intention:", error);
+    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
   }
-
-  console.log("[API] Generated and saved new intention:", newIntention.id);
-  return NextResponse.json(newIntention);
 }
 
 export async function POST(req: Request) {
-  const { id, vote } = await req.json();
-  const supabase = getSupabaseClient(req);
+  try {
+    const { id, vote } = await req.json();
+    const supabase = getSupabaseClient(req);
 
-  const { error } = await supabase
-    .from("daily_intentions")
-    .update({ vote })
-    .eq("id", id);
+    const { error } = await supabase
+      .from("daily_intentions")
+      .update({ vote })
+      .eq("id", id);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("[API] Unhandled error in POST /api/intention:", error);
+    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
   }
-
-  return NextResponse.json({ success: true });
 }
