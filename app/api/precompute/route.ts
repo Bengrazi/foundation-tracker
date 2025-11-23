@@ -33,13 +33,13 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 1. Generate Intentions for next 3 days
+    // 1. Generate Intentions for next 3 days (including today)
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
     const { data: goals } = await supabase.from("goals").select("title").eq("user_id", user.id);
     const goalsText = goals?.map((g: any) => g.title).join(", ") ?? "";
     const openai = getOpenAIClient();
 
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 0; i <= 3; i++) {
         const targetDate = format(addDays(new Date(), i), "yyyy-MM-dd");
 
         // Check if already exists
@@ -77,7 +77,7 @@ User Context: Goals: ${goalsText}. Key Truth: ${profile?.key_truth}.
     // 2. Precompute Celebrations (if requested)
     if (check_celebrations !== false) {
         // Milestones
-        const goldMilestones = [3, 7, 14, 30, 50, 75, 100, 150, 200, 250, 300, 365, 500, 1000];
+        const goldMilestones = [1, 3, 7, 14, 30, 50, 75, 100, 150, 200, 250, 300, 365, 500, 1000];
         const habitMilestones = [7, 30, 60, 90, 100, 365, 1000];
 
         // Check Gold Streak (current + 1)
