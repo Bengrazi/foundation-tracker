@@ -274,7 +274,8 @@ export default function FoundationPage() {
     // Fetch Daily Intention
     async function fetchIntention(force = false) {
       const today = format(new Date(), "yyyy-MM-dd");
-      console.log("Fetching intention for:", today, "Force:", force);
+      console.log(`[Client] Fetching intention. Selected: ${selectedDate}, Today: ${today}, Force: ${force}`);
+
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
@@ -891,19 +892,6 @@ export default function FoundationPage() {
             />
           </div>
         </section>
-
-        {/* Daily Intention */}
-        <DailyIntentionCard
-          intention={dailyIntention || DEFAULT_INTENTION}
-        />
-
-        {/* Gold Streak Display */}
-        <div className="mb-2 flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-full bg-yellow-500/10 px-4 py-1.5 text-xs font-semibold text-yellow-500 ring-1 ring-inset ring-yellow-500/20">
-            <span>🏆</span>
-            <span>Gold Streak: {goldStreak} {goldStreak === 1 ? "day" : "days"}</span>
-          </div>
-        </div>
 
         {/* Foundations list */}
         <section>

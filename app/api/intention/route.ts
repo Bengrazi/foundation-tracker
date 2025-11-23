@@ -11,19 +11,6 @@ function getOpenAIClient() {
   return new OpenAI({ apiKey });
 }
 
-// Initialize Supabase (Service Role for RLS bypass if needed, or just standard client)
-// Since we are in a route handler, we should use the standard client but we need the user's session.
-// However, for simplicity in this "prototype" phase, we can use the ANON key and rely on the `Authorization` header passed from the client,
-// OR we can use a service role key if we want to do admin things. 
-// But `daily_intentions` has RLS. 
-// Actually, the best way in Next.js App Router is `createServerClient` from `@supabase/ssr`.
-// But I don't have that package installed/configured in the snippets I've seen.
-// I see `lib/supabaseClient.ts` which is a client-side client.
-// I'll use a direct `createClient` with the URL and ANON key, passing the user's token if possible, 
-// OR just use the Service Role key for server-side operations and manually check auth.
-// Let's use Service Role for reliability in generation, but we need to verify the user.
-// Actually, let's just use the `Authorization` header to forward the user's session.
-
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
@@ -37,8 +24,12 @@ function getSupabaseClient(req: Request) {
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date"); // YYYY-MM-DD from client
+  const force = searchParams.get("force") === "true";
+
+  console.log(`[API] GET /api/intention - Date: ${date}, Force: ${force}`);
 
   if (!date) {
+    console.error("[API] Missing date parameter");
     return NextResponse.json({ error: "Date required" }, { status: 400 });
   }
 
@@ -46,6 +37,7 @@ export async function GET(req: Request) {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
   if (authError || !user) {
+    console.error("[API] Unauthorized access attempt");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -57,17 +49,23 @@ export async function GET(req: Request) {
     .eq("date", date)
     .single();
 
-  const force = searchParams.get("force") === "true";
+  if (fetchError && fetchError.code !== 'PGRST116') {
+    console.error("[API] Error fetching intention:", fetchError);
+  }
 
   if (existing && !force) {
+    console.log("[API] Returning existing intention:", existing.id);
     return NextResponse.json(existing);
   }
 
   if (existing && force) {
+    console.log("[API] Force refresh: Deleting existing intention:", existing.id);
     await supabase
       .from("daily_intentions")
       .delete()
       .eq("id", existing.id);
+  } else {
+    console.log("[API] No existing intention found (or force=true), generating new one.");
   }
 
   // 2. If not, generate one
@@ -126,6 +124,7 @@ Core Truth: ${profileText}
     return NextResponse.json({ error: "Failed to save intention" }, { status: 500 });
   }
 
+  console.log("[API] Generated and saved new intention:", newIntention.id);
   return NextResponse.json(newIntention);
 }
 
