@@ -41,6 +41,11 @@ create policy "Users can update their own intentions"
   on daily_intentions for update
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can delete their own intentions" on daily_intentions;
+create policy "Users can delete their own intentions"
+  on daily_intentions for delete
+  using (auth.uid() = user_id);
+
 -- Policies for celebrations
 drop policy if exists "Users can view their own celebrations" on celebrations;
 create policy "Users can view their own celebrations"

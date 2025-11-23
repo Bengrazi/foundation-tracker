@@ -126,7 +126,12 @@ Core Truth: ${profileText}
 
     if (insertError) {
       console.error("[API] Error saving intention:", insertError);
-      return NextResponse.json({ error: "Failed to save intention" }, { status: 500 });
+      return NextResponse.json({
+        error: "Failed to save intention",
+        details: insertError.message,
+        code: insertError.code,
+        hint: insertError.hint
+      }, { status: 500 });
     }
 
     console.log("[API] Generated and saved new intention:", newIntention.id);
