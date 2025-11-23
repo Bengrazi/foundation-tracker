@@ -893,6 +893,21 @@ export default function FoundationPage() {
           </div>
         </section>
 
+        {/* Daily Intention */}
+        <div onClick={() => fetchIntention(true)} title="Debug: Force Refresh" className="cursor-pointer">
+          <DailyIntentionCard
+            intention={dailyIntention || DEFAULT_INTENTION}
+          />
+        </div>
+
+        {/* Gold Streak Display */}
+        <div className="mb-2 flex justify-center">
+          <div className="inline-flex items-center gap-2 rounded-full bg-yellow-500/10 px-4 py-1.5 text-xs font-semibold text-yellow-500 ring-1 ring-inset ring-yellow-500/20">
+            <span>🏆</span>
+            <span>Gold Streak: {goldStreak} {goldStreak === 1 ? "day" : "days"}</span>
+          </div>
+        </div>
+
         {/* Foundations list */}
         <section>
           <div className="mb-2 flex items-center justify-between">
