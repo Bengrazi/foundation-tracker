@@ -245,6 +245,23 @@ export default function FoundationPage() {
 
     checkOnboarding();
 
+    // Trigger precompute buffer on mount
+    const triggerPrecompute = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      fetch("/api/precompute", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          check_celebrations: false // Only generate intentions
+        }),
+      });
+    };
+    triggerPrecompute();
+
     // Fetch Daily Intention
     async function fetchIntention() {
       const today = format(new Date(), "yyyy-MM-dd");
@@ -838,16 +855,7 @@ export default function FoundationPage() {
 
       <main className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-24 pt-2">
         {/* Daily Intention */}
-        {dailyIntention ? (
-          <DailyIntentionCard intention={dailyIntention} />
-        ) : (
-          <div className="mb-4 rounded-2xl border border-app-border bg-app-card p-4 text-center">
-            <p className="text-xs text-app-muted">Daily Intention</p>
-            <p className="mt-1 text-sm font-medium text-app-main italic">
-              "Focus on the step in front of you."
-            </p>
-          </div>
-        )}
+
 
         {/* Date header */}
         <section className="mt-2 flex items-center justify-between">
@@ -878,6 +886,18 @@ export default function FoundationPage() {
             </div>
           </div>
         </section>
+
+        {/* Daily Intention */}
+        {dailyIntention ? (
+          <DailyIntentionCard intention={dailyIntention} />
+        ) : (
+          <div className="mb-4 rounded-2xl border border-app-border bg-app-card p-4 text-center">
+            <p className="text-xs text-app-muted">Daily Intention</p>
+            <p className="mt-1 text-sm font-medium text-app-main italic">
+              "Focus on the step in front of you."
+            </p>
+          </div>
+        )}
 
         {/* Foundations list */}
         <section>

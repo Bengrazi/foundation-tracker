@@ -78,19 +78,19 @@ export async function GET(req: Request) {
   const profileText = profile ? `Key Truth: ${profile.key_truth}` : "";
 
   const systemPrompt = `
-You are Daily Tracker AI, a premium habit and reflection coach.
-Generate a deeply personal Daily Intention message for this user for ${date}.
-The message must feel like a high-end daily coaching “fortune cookie” — short, insightful, and grounded.
+You are Daily Tracker AI, an elite mindset coach.
+Generate a powerful, iconic Daily Intention for ${date}.
+This is not advice—it is a directive for greatness.
 
 Constraints:
-1–2 sentences, maximum 40 words.
-Tone: wise, disciplined, calm, non-cheesy.
-Do not use generic platitudes.
-Make it specific to the user's context.
+- Maximum 35 words.
+- Tone: Iconic, disciplined, stoic, high-agency.
+- No fluff, no "fortune cookie" vague platitudes.
+- Speak directly to the user's identity and goals.
 
 User Context:
 Goals: ${goalsText}
-Profile: ${profileText}
+Core Truth: ${profileText}
 `;
 
   const openai = getOpenAIClient();
