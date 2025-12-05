@@ -84,23 +84,23 @@
 
   [data-theme="cherry"] {
     /* Cherry (Red-tone Sunshine - Standard) */
-    --bg-main: #fff1f2;
-    /* rose-50 */
-    --bg-card: #ffe4e6;
-    /* rose-100 */
-    --bg-card-hover: #fecdd3;
-    /* rose-200 */
-    --bg-input: #ffffff;
+    --bg-main: #fef2f2;
+    /* red-50 */
+    --bg-card: #ffffff;
+    --bg-card-hover: #fee2e2;
+    /* red-100 */
+    --bg-input: #fff1f2;
+    /* red-50 */
     --text-main: #881337;
     /* rose-900 */
-    --text-muted: #be123c;
-    /* rose-700 */
-    --border: #fda4af;
-    /* rose-300 */
-    --accent: #e11d48;
-    /* rose-600 */
-    --accent-hover: #be123c;
-    /* rose-700 */
+    --text-muted: #991b1b;
+    /* red-800 - darker for contrast */
+    --border: #fecaca;
+    /* red-200 */
+    --accent: #dc2626;
+    /* red-600 */
+    --accent-hover: #b91c1c;
+    /* red-700 */
     --accent-text: #ffffff;
     --danger: #ef4444;
     --danger-bg: #fee2e2;
@@ -241,4 +241,45 @@ html[data-text-size="large"] {
 
 html[data-text-size="xl"] {
   font-size: 20px;
+}
+
+@keyframes spin-border {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.gold-racetrack {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid transparent;
+  /* Fallback */
+}
+
+.gold-racetrack::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: conic-gradient(from 0deg, transparent 0%, #eab308 20%, transparent 40%);
+  animation: spin-border 3s linear infinite;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+.gold-racetrack::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  background: var(--bg-card);
+  border-radius: inherit;
+  z-index: 0;
+}
+
+.gold-racetrack>* {
+  position: relative;
+  z-index: 1;
 }

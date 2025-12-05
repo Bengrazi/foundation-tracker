@@ -29,6 +29,8 @@ export function GoalsWidget() {
     const [newDate, setNewDate] = useState(format(new Date(), "yyyy-MM-dd"));
     const [newStatus, setNewStatus] = useState<GoalStatus>("not_started");
 
+    const [editingId, setEditingId] = useState<string | null>(null);
+
     useEffect(() => {
         applySavedTextSize();
     }, []);
@@ -58,35 +60,64 @@ export function GoalsWidget() {
         loadGoals();
     }, []);
 
-    async function createGoal() {
+    async function handleSaveGoal() {
         const {
             data: { user },
         } = await supabase.auth.getUser();
         if (!user || !newTitle.trim()) return;
 
-        const { data, error } = await supabase
-            .from("goals")
-            .insert({
-                user_id: user.id,
-                title: newTitle.trim(),
-                target_date: newDate,
-                status: newStatus,
-                horizon: newHorizon,
-                order_index: (goals.length + 1) * 1000, // simple append logic
-            })
-            .select("*")
-            .single();
+        if (editingId) {
+            // Update existing
+            const { data, error } = await supabase
+                .from("goals")
+                .update({
+                    title: newTitle.trim(),
+                    target_date: newDate,
+                    status: newStatus,
+                    horizon: newHorizon,
+                })
+                .eq("id", editingId)
+                .select("*")
+                .single();
 
-        if (error) {
-            console.error("Error creating goal", error);
-            alert(`Error creating goal: ${error.message}`);
-            return;
-        }
+            if (error) {
+                console.error("Error updating goal", error);
+                alert(`Error updating goal: ${error.message}`);
+                return;
+            }
 
-        if (data) {
-            setGoals((prev) => [...prev, data as Goal]);
-            setNewTitle("");
-            setShowNewGoal(false);
+            if (data) {
+                setGoals((prev) => prev.map(g => g.id === editingId ? (data as Goal) : g));
+                setEditingId(null);
+                setNewTitle("");
+                setShowNewGoal(false);
+            }
+        } else {
+            // Create new
+            const { data, error } = await supabase
+                .from("goals")
+                .insert({
+                    user_id: user.id,
+                    title: newTitle.trim(),
+                    target_date: newDate,
+                    status: newStatus,
+                    horizon: newHorizon,
+                    order_index: (goals.length + 1) * 1000,
+                })
+                .select("*")
+                .single();
+
+            if (error) {
+                console.error("Error creating goal", error);
+                alert(`Error creating goal: ${error.message}`);
+                return;
+            }
+
+            if (data) {
+                setGoals((prev) => [...prev, data as Goal]);
+                setNewTitle("");
+                setShowNewGoal(false);
+            }
         }
     }
 
@@ -94,6 +125,19 @@ export function GoalsWidget() {
         if (!confirm("Are you sure you want to delete this goal?")) return;
         await supabase.from("goals").delete().eq("id", id);
         setGoals((prev) => prev.filter((g) => g.id !== id));
+        if (editingId === id) {
+            setEditingId(null);
+            setShowNewGoal(false);
+        }
+    }
+
+    function startEdit(goal: Goal) {
+        setEditingId(goal.id);
+        setNewTitle(goal.title);
+        setNewDate(goal.target_date);
+        setNewStatus(goal.status);
+        setNewHorizon(goal.horizon);
+        setShowNewGoal(true);
     }
 
     async function moveGoal(goal: Goal, direction: "up" | "down") {
@@ -201,10 +245,10 @@ export function GoalsWidget() {
                     </select>
 
                     <button
-                        onClick={() => deleteGoal(goal.id)}
-                        className="text-red-400/60 hover:text-red-400 text-[10px] whitespace-nowrap px-1"
+                        onClick={() => startEdit(goal)}
+                        className="text-app-muted hover:text-app-accent-color text-[10px] whitespace-nowrap px-1"
                     >
-                        Delete
+                        Edit
                     </button>
                 </div>
             </div>
@@ -229,17 +273,27 @@ export function GoalsWidget() {
 
                 <div className="flex flex-col gap-2">
                     <button
-                        onClick={() => setShowNewGoal((v) => !v)}
+                        onClick={() => {
+                            if (showNewGoal) {
+                                setShowNewGoal(false);
+                                setEditingId(null);
+                                setNewTitle("");
+                            } else {
+                                setShowNewGoal(true);
+                                setEditingId(null);
+                                setNewTitle("");
+                            }
+                        }}
                         className="rounded-full border border-app-border bg-app-card px-3 py-1 text-[11px] text-app-main hover:border-app-accent"
                     >
-                        {showNewGoal ? "Close new goal" : "New goal"}
+                        {showNewGoal ? "Close" : "New goal"}
                     </button>
                 </div>
             </header>
 
             {showNewGoal && (
                 <section className="mb-6 rounded-2xl border border-app-border bg-app-card p-4 text-xs">
-                    <h2 className="text-app-main font-semibold mb-2">New goal</h2>
+                    <h2 className="text-app-main font-semibold mb-2">{editingId ? "Edit goal" : "New goal"}</h2>
 
                     <label className="text-[11px] text-app-muted">Horizon</label>
                     <select
@@ -281,12 +335,22 @@ export function GoalsWidget() {
                         <option value="achieved">Achieved</option>
                     </select>
 
-                    <button
-                        onClick={createGoal}
-                        className="mt-4 w-full rounded-full bg-app-accent py-1.5 text-xs text-app-accent-text font-semibold"
-                    >
-                        Add goal
-                    </button>
+                    <div className="mt-4 flex gap-2">
+                        <button
+                            onClick={handleSaveGoal}
+                            className="flex-1 rounded-full bg-app-accent py-1.5 text-xs text-app-accent-text font-semibold"
+                        >
+                            {editingId ? "Save Changes" : "Add goal"}
+                        </button>
+                        {editingId && (
+                            <button
+                                onClick={() => deleteGoal(editingId)}
+                                className="rounded-full border border-red-200 bg-red-50 px-4 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100"
+                            >
+                                Delete
+                            </button>
+                        )}
+                    </div>
                 </section>
             )}
 

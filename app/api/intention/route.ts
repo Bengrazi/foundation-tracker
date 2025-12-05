@@ -47,15 +47,8 @@ export async function GET(req: Request) {
       .eq("date", date)
       .single();
 
-    if (existing && !force) {
+    if (existing) {
       return NextResponse.json(existing);
-    }
-
-    if (existing && force) {
-      await supabase
-        .from("daily_intentions")
-        .delete()
-        .eq("id", existing.id);
     }
 
     // Generate new intention

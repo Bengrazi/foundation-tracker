@@ -24,9 +24,12 @@ export default function ReflectPage() {
   );
   const [mood, setMood] = useState<Mood | null>(null);
   const [text, setText] = useState("");
+  const [answer, setAnswer] = useState("");
   const [saving, setSaving] = useState(false);
   const [showJournal, setShowJournal] = useState(true);
   const [showAIQuestion, setShowAIQuestion] = useState(false);
+
+  const SEPARATOR = "\n\n--- Daily Question Answer ---\n";
 
   useEffect(() => {
     applySavedTextSize();
@@ -56,10 +59,19 @@ export default function ReflectPage() {
     if (!error && data) {
       const r = data as Reflection;
       setMood(r.mood);
-      setText(r.text ?? "");
+      const fullText = r.text ?? "";
+      if (fullText.includes(SEPARATOR)) {
+        const parts = fullText.split(SEPARATOR);
+        setText(parts[0]);
+        setAnswer(parts[1]);
+      } else {
+        setText(fullText);
+        setAnswer("");
+      }
     } else {
       setMood(null);
       setText("");
+      setAnswer("");
     }
   }
 
@@ -71,6 +83,8 @@ export default function ReflectPage() {
 
     setSaving(true);
 
+    const fullText = text + (answer.trim() ? SEPARATOR + answer.trim() : "");
+
     const { data, error } = await supabase
       .from("reflections")
       .upsert(
@@ -78,7 +92,7 @@ export default function ReflectPage() {
           user_id: user.id,
           day: selectedDate,
           mood,
-          text,
+          text: fullText,
         },
         {
           onConflict: "user_id,day",
@@ -175,7 +189,24 @@ export default function ReflectPage() {
           </section>
         )}
 
-        {showAIQuestion && <DailyAIQuestion />}
+        {showAIQuestion && (
+          <div className="mb-4">
+            <DailyAIQuestion />
+            <textarea
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder="Your answer..."
+              className="mt-2 w-full min-h-[80px] rounded-xl border border-app-border bg-app-input px-3 py-2 text-xs text-app-main"
+            />
+            <button
+              onClick={saveReflection}
+              disabled={saving}
+              className="mt-2 w-full rounded-full border border-app-accent text-app-accent py-1.5 text-xs font-semibold hover:bg-app-accent hover:text-app-accent-text transition-colors disabled:opacity-60"
+            >
+              {saving ? "Saving..." : "Save Answer"}
+            </button>
+          </div>
+        )}
 
         <div className="mt-6">
           <ChatWidget />

@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 
-export type Theme = "dark" | "light" | "sunrise" | "cherry" | "cherry-dark";
+export type Theme = "dark" | "light" | "cherry" | "cherry-dark";
 
 export function applySavedTheme() {
     if (typeof window === "undefined") return;

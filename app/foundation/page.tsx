@@ -198,6 +198,7 @@ export default function FoundationPage() {
   const [foundations, setFoundations] = useState<Foundation[]>([]);
   const [logsByDate, setLogsByDate] = useState<LogsByDate>({});
   const [loading, setLoading] = useState(true);
+  const [points, setPoints] = useState(0);
 
   const [showNewHabitForm, setShowNewHabitForm] = useState(false);
   const [creatingHabit, setCreatingHabit] = useState(false);
@@ -342,6 +343,15 @@ export default function FoundationPage() {
       if (!auth?.user) {
         setLoading(false);
         return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("points")
+        .eq("id", auth.user.id)
+        .single();
+      if (profile) {
+        setPoints(profile.points ?? 0);
       }
 
       const { data: fdData, error: fdError } = await supabase
@@ -889,7 +899,10 @@ export default function FoundationPage() {
     setOnboarding((prev) => ({ ...prev, [field]: value }));
 
   const handleOnboardingSubmit = async () => {
-    if (!onboarding.priorities.trim() || !onboarding.lifeSummary.trim()) {
+    if (!onboarding.priorities.trim()) {
+      return;
+    }
+    if (interestSelection.goals && !onboarding.lifeSummary.trim()) {
       return;
     }
 
@@ -1022,7 +1035,7 @@ export default function FoundationPage() {
 
         {/* Gold Streak Display */}
         <div className="mb-2 flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-full bg-yellow-500/10 px-4 py-1.5 text-xs font-semibold text-yellow-500 ring-1 ring-inset ring-yellow-500/20">
+          <div className="inline-flex items-center gap-2 rounded-full bg-yellow-500/10 px-6 py-2 text-sm font-bold text-yellow-500 ring-1 ring-inset ring-yellow-500/20">
             <span>🏆</span>
             <span>Gold Streak: {goldStreak} {goldStreak === 1 ? "day" : "days"}</span>
           </div>
@@ -1093,13 +1106,26 @@ export default function FoundationPage() {
                 )}
               </div>
 
-              <button
-                onClick={handleSaveFoundation}
-                disabled={creatingHabit}
-                className="mt-3 w-full rounded-full bg-app-accent py-1.5 text-xs font-semibold text-app-accent-text disabled:opacity-60"
-              >
-                {creatingHabit ? "Saving..." : "Save"}
-              </button>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={handleSaveFoundation}
+                  disabled={creatingHabit}
+                  className="flex-1 rounded-full bg-app-accent py-1.5 text-xs font-semibold text-app-accent-text disabled:opacity-60"
+                >
+                  {creatingHabit ? "Saving..." : "Save"}
+                </button>
+                {editingId && (
+                  <button
+                    onClick={() => {
+                      const f = foundations.find(f => f.id === editingId);
+                      if (f) handleDeleteFoundationFromTodayForward(f);
+                    }}
+                    className="rounded-full border border-red-200 bg-red-50 px-4 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -1125,14 +1151,14 @@ export default function FoundationPage() {
                 logs.some((l) => l.foundation_id === found.id && l.completed)
               );
 
-              let ringClass = "ring-app-border";
-              if (allDone) ringClass = "ring-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.3)]";
-              else if (completed) ringClass = "ring-green-500";
+              let ringClass = "ring-1 ring-app-border";
+              if (allDone) ringClass = "gold-racetrack shadow-[0_0_15px_rgba(234,179,8,0.4)]";
+              else if (completed) ringClass = "ring-1 ring-green-500";
 
               return (
                 <div
                   key={f.id}
-                  className={`mb-3 rounded-2xl bg-app-card p-3 ring-1 transition-all duration-300 ${ringClass}`}
+                  className={`mb-3 rounded-2xl bg-app-card p-3 transition-all duration-300 ${ringClass}`}
                 >
                   {/* Row 1: Checkbox + Title */}
                   <div className="flex items-center gap-3 mb-2">
@@ -1197,16 +1223,6 @@ export default function FoundationPage() {
                         >
                           Edit
                         </button>
-                        {deletingId === f.id ? (
-                          <span className="text-[10px] text-red-400 animate-pulse">...</span>
-                        ) : (
-                          <button
-                            onClick={() => handleDeleteFoundationFromTodayForward(f)}
-                            className="text-[10px] text-red-400/60 hover:text-red-400 px-1"
-                          >
-                            Remove
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -1225,6 +1241,19 @@ export default function FoundationPage() {
                 </div>
               );
             })}
+        </section>
+
+        {/* Cherry Points Tracker */}
+        <section className="mt-8 mb-8 rounded-3xl bg-app-card p-6 text-center ring-1 ring-app-border">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-app-muted">
+            Cherry Balance
+          </div>
+          <div className="mb-2 text-4xl font-black text-app-accent-color">
+            {points.toLocaleString()} 🍒
+          </div>
+          <p className="text-xs text-app-muted max-w-[200px] mx-auto leading-relaxed">
+            Earn Cherry by completing your habits and goals. Use Cherry for cash and prizes!
+          </p>
         </section>
       </main>
 

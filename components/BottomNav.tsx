@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const allTabs = [
-  { label: "Cherry", href: "/foundation" },
+  { label: "Foundation", href: "/foundation" },
   { label: "Plan", href: "/plan" },
   { label: "Reflect", href: "/reflect" },
   { label: "Settings", href: "/settings" },

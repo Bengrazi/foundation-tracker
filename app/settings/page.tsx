@@ -267,7 +267,7 @@ export default function SettingsPage() {
   const themeOptions: { label: string; value: Theme }[] = [
     { label: "Dark", value: "dark" },
     { label: "Light", value: "light" },
-    { label: "Sunrise", value: "sunrise" },
+
     { label: "Cherry", value: "cherry" },
     { label: "Cherry Dark", value: "cherry-dark" },
   ];
