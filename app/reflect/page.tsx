@@ -190,22 +190,22 @@ export default function ReflectPage() {
         )}
 
         {showAIQuestion && (
-          <div className="mb-4">
+          <section className="mb-4 rounded-2xl border border-app-border bg-app-card p-4">
             <DailyAIQuestion />
             <textarea
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
               placeholder="Your answer..."
-              className="mt-2 w-full min-h-[80px] rounded-xl border border-app-border bg-app-input px-3 py-2 text-xs text-app-main"
+              className="mt-3 w-full min-h-[80px] rounded-xl border border-app-border bg-app-input px-3 py-2 text-xs text-app-main"
             />
             <button
               onClick={saveReflection}
               disabled={saving}
-              className="mt-2 w-full rounded-full border border-app-accent text-app-accent py-1.5 text-xs font-semibold hover:bg-app-accent hover:text-app-accent-text transition-colors disabled:opacity-60"
+              className="mt-3 w-full rounded-full bg-app-accent py-1.5 text-xs font-semibold text-app-accent-text disabled:opacity-60"
             >
               {saving ? "Saving..." : "Save Answer"}
             </button>
-          </div>
+          </section>
         )}
 
         <div className="mt-6">
