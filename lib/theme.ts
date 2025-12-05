@@ -1,10 +1,10 @@
 import { supabase } from "./supabaseClient";
 
-export type Theme = "dark" | "light" | "sunrise";
+export type Theme = "dark" | "light" | "sunrise" | "cherry" | "cherry-dark";
 
 export function applySavedTheme() {
     if (typeof window === "undefined") return;
-    const theme = localStorage.getItem("foundation_theme") || "dark";
+    const theme = localStorage.getItem("foundation_theme") || "cherry";
     document.documentElement.setAttribute("data-theme", theme);
 }
 

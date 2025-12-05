@@ -7,8 +7,8 @@ import BottomNav from "@/components/BottomNav";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Foundation",
-  description: "Daily foundations, reflections, and AI insights.",
+  title: "CHERRY",
+  description: "Earn cherries for your daily habits. Track, reflect, and grow.",
 };
 
 import { SettingsSync } from "@/components/SettingsSync";

@@ -261,6 +261,8 @@ export default function SettingsPage() {
     { label: "Dark", value: "dark" },
     { label: "Light", value: "light" },
     { label: "Sunrise", value: "sunrise" },
+    { label: "Cherry", value: "cherry" },
+    { label: "Cherry Dark", value: "cherry-dark" },
   ];
 
   return (
@@ -271,7 +273,7 @@ export default function SettingsPage() {
         <section>
           <h1 className="text-lg font-semibold text-app-main">Settings</h1>
           <p className="mt-1 text-xs text-app-muted">
-            Tune your Foundation experience, export your data, or reset this device.
+            Tune your Cherry experience, export your data, or reset this device.
           </p>
         </section>
 
@@ -366,6 +368,71 @@ export default function SettingsPage() {
           </p>
         </section>
 
+        {/* Features */}
+        <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
+          <h2 className="text-sm font-semibold text-app-main">Features</h2>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-medium text-app-main">Show Plans</div>
+              <div className="text-[10px] text-app-muted">Goals and long-term vision</div>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                type="checkbox"
+                checked={localStorage.getItem("foundation_show_plans") !== "false"}
+                onChange={(e) => {
+                  localStorage.setItem("foundation_show_plans", String(e.target.checked));
+                  window.location.reload(); // Reload to update nav
+                }}
+                className="peer sr-only"
+              />
+              <div className="peer h-5 w-9 rounded-full bg-app-card-hover ring-1 ring-app-border after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-app-accent peer-checked:after:translate-x-full"></div>
+            </label>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-medium text-app-main">Show Journal</div>
+              <div className="text-[10px] text-app-muted">Daily reflections and notes</div>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                type="checkbox"
+                checked={localStorage.getItem("foundation_show_journal") !== "false"}
+                onChange={(e) => {
+                  localStorage.setItem("foundation_show_journal", String(e.target.checked));
+                  window.location.reload();
+                }}
+                className="peer sr-only"
+              />
+              <div className="peer h-5 w-9 rounded-full bg-app-card-hover ring-1 ring-app-border after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-app-accent peer-checked:after:translate-x-full"></div>
+            </label>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-medium text-app-main">Daily AI Question</div>
+              <div className="text-[10px] text-app-muted">Get a thought-provoking question daily</div>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                type="checkbox"
+                checked={localStorage.getItem("foundation_daily_ai_question_enabled") === "true"}
+                onChange={(e) => {
+                  localStorage.setItem("foundation_daily_ai_question_enabled", String(e.target.checked));
+                  // Force re-render or just rely on page reload if needed, but here state update is local
+                  // We might need state for these to trigger re-render of this component
+                  // For now, reload is safest for global settings
+                  window.location.reload();
+                }}
+                className="peer sr-only"
+              />
+              <div className="peer h-5 w-9 rounded-full bg-app-card-hover ring-1 ring-app-border after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-app-accent peer-checked:after:translate-x-full"></div>
+            </label>
+          </div>
+        </section>
+
         {/* Export */}
         <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
           <div className="flex items-center justify-between">
@@ -403,7 +470,7 @@ export default function SettingsPage() {
         <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-red-500/50">
           <h2 className="text-sm font-semibold text-red-400">Reset app</h2>
           <p className="text-xs text-app-muted">
-            Reset Foundation on <strong>this device only</strong>. This:
+            Reset Cherry on <strong>this device only</strong>. This:
           </p>
           <ul className="list-disc pl-5 text-xs text-app-muted">
             <li>Clears habits, streaks, and notes.</li>

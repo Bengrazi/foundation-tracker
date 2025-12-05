@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
-const tabs = [
-  { label: "Foundation", href: "/foundation" },
+const allTabs = [
+  { label: "Cherry", href: "/foundation" },
   { label: "Plan", href: "/plan" },
   { label: "Reflect", href: "/reflect" },
   { label: "Settings", href: "/settings" },
@@ -12,6 +13,18 @@ const tabs = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const [tabs, setTabs] = useState(allTabs);
+
+  useEffect(() => {
+    // Check settings
+    const showPlans = localStorage.getItem("foundation_show_plans") !== "false";
+
+    if (!showPlans) {
+      setTabs(allTabs.filter(t => t.label !== "Plan"));
+    } else {
+      setTabs(allTabs);
+    }
+  }, []);
 
   return (
     <>

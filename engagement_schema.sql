@@ -61,3 +61,30 @@ drop policy if exists "Users can update their own celebrations" on celebrations;
 create policy "Users can update their own celebrations"
   on celebrations for update
   using (auth.uid() = user_id);
+
+
+-- Add points to profiles
+alter table profiles add column if not exists points int default 0;
+
+-- Create points_history table
+create table if not exists points_history (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  amount int not null,
+  reason text not null, -- 'habit_completion', 'streak_bonus', 'reflection', etc.
+  reference_id uuid, -- id of the log or reflection
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable RLS for points_history
+alter table points_history enable row level security;
+
+drop policy if exists "Users can view their own points history" on points_history;
+create policy "Users can view their own points history"
+  on points_history for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert their own points history" on points_history;
+create policy "Users can insert their own points history"
+  on points_history for insert
+  with check (auth.uid() = user_id);

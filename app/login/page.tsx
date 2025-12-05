@@ -48,7 +48,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-3xl border border-slate-800 bg-slate-900/95 p-6 shadow-xl shadow-black/40">
-        <h1 className="text-xl font-semibold text-slate-50 mb-1">Foundation</h1>
+        <h1 className="text-xl font-semibold text-slate-50 mb-1">Cherry</h1>
         <p className="mb-6 text-xs text-slate-400">
           {isSignUp
             ? "Create an account to start your journey."
@@ -109,7 +109,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center space-y-2">
           <button
             type="button"
             onClick={() => {
@@ -117,12 +117,41 @@ export default function LoginPage() {
               setErrorMsg("");
               setSuccessMsg("");
             }}
-            className="text-xs text-slate-400 hover:text-emerald-400 transition-colors"
+            className="block w-full text-xs text-app-muted hover:text-app-accent-hover transition-colors"
           >
             {isSignUp
               ? "Already have an account? Sign in"
               : "Don't have an account? Sign up"}
           </button>
+
+          {!isSignUp && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!email) {
+                  setErrorMsg("Please enter your email address first.");
+                  return;
+                }
+                setLoading(true);
+                setErrorMsg("");
+                setSuccessMsg("");
+                try {
+                  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                    redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
+                  });
+                  if (error) throw error;
+                  setSuccessMsg("Password reset link sent! Check your email.");
+                } catch (err: any) {
+                  setErrorMsg(err.message || "Failed to send reset link.");
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="block w-full text-[11px] text-app-muted/70 hover:text-app-muted transition-colors"
+            >
+              Forgot your password?
+            </button>
+          )}
         </div>
       </div>
     </div>

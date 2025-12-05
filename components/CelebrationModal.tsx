@@ -26,8 +26,8 @@ export function CelebrationModal({ message, onClose }: Props) {
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="mb-6 flex justify-center">
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/20 ring-4 ring-yellow-500/50 animate-bounce">
-                        <span className="text-4xl">🏆</span>
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-app-accent/20 ring-4 ring-app-accent/50 animate-bounce">
+                        <span className="text-4xl">🍒</span>
                     </div>
                 </div>
 
@@ -35,7 +35,7 @@ export function CelebrationModal({ message, onClose }: Props) {
                     <h3 className="text-2xl font-bold text-white tracking-tight">
                         Milestone Unlocked
                     </h3>
-                    <p className="text-lg font-medium leading-relaxed text-yellow-100/90 font-serif italic">
+                    <p className="text-lg font-medium leading-relaxed text-white/90 font-serif italic">
                         &ldquo;{message}&rdquo;
                     </p>
                 </div>

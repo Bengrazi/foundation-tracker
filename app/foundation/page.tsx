@@ -9,6 +9,8 @@ import { applySavedTheme } from "@/lib/theme";
 import { DailyIntentionCard } from "@/components/DailyIntentionCard";
 import { CelebrationModal } from "@/components/CelebrationModal";
 import { DailyIntention } from "@/lib/engagementTypes";
+import { awardPoints, POINTS } from "@/lib/points";
+import { OnboardingInterest, InterestSelection } from "@/components/OnboardingInterest";
 
 // ------------- Types -------------
 
@@ -200,6 +202,7 @@ export default function FoundationPage() {
   const [showNewHabitForm, setShowNewHabitForm] = useState(false);
   const [creatingHabit, setCreatingHabit] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState("");
@@ -215,6 +218,12 @@ export default function FoundationPage() {
     ideology: "",
   });
   const [savingOnboarding, setSavingOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [interestSelection, setInterestSelection] = useState<InterestSelection>({
+    habits: true,
+    goals: false,
+    journal: false,
+  });
 
   const [dailyIntention, setDailyIntention] = useState<DailyIntention | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>("");
@@ -617,6 +626,17 @@ export default function FoundationPage() {
         newGoldStreak,
         selectedDate
       );
+
+      // Award Points
+      const { data: auth } = await supabase.auth.getUser();
+      if (auth?.user) {
+        // Base completion points
+        awardPoints(auth.user.id, POINTS.HABIT_COMPLETION, "habit_completion", foundation.id);
+
+        // Streak bonuses
+        if (newStreak === 7) awardPoints(auth.user.id, POINTS.STREAK_BONUS_7, "streak_bonus_7", foundation.id);
+        if (newStreak === 30) awardPoints(auth.user.id, POINTS.STREAK_BONUS_30, "streak_bonus_30", foundation.id);
+      }
     }
 
     if (existing) {
@@ -711,40 +731,122 @@ export default function FoundationPage() {
     }
   };
 
-  const handleCreateFoundation = async () => {
-    if (!newTitle.trim()) return;
+  const handleEditFoundation = (f: Foundation) => {
+    setEditingId(f.id);
+    setNewTitle(f.title);
+    setNewSchedule(f.schedule_type);
+    setNewXPerWeek(f.x_per_week || 3);
+    setShowNewHabitForm(true);
+  };
 
+  const handleSaveFoundation = async () => {
+    if (!newTitle.trim()) return;
     setCreatingHabit(true);
+
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) {
       setCreatingHabit(false);
       return;
     }
 
-    const insert = {
-      user_id: auth.user.id,
-      title: newTitle.trim(),
-      schedule_type: newSchedule,
-      x_per_week: newSchedule === "xPerWeek" ? newXPerWeek : null,
-      start_date: selectedDate,
-      end_date: null,
-    };
+    if (editingId) {
+      // EDIT MODE
+      const foundation = foundations.find(f => f.id === editingId);
+      if (!foundation) return;
 
-    const { data, error } = await supabase
-      .from("foundations")
-      .insert(insert)
-      .select("*")
-      .single();
+      // Check for past logs
+      const yesterday = format(addDays(parseISO(selectedDate), -1), "yyyy-MM-dd");
+      const { count } = await supabase
+        .from("foundation_logs")
+        .select("*", { count: "exact", head: true })
+        .eq("foundation_id", editingId)
+        .lte("date", yesterday); // Logs before today
 
-    setCreatingHabit(false);
+      const hasPastLogs = (count || 0) > 0;
 
-    if (error) {
-      console.error("Error creating foundation", error);
-      alert(`Error creating habit: ${error.message}`);
-      return;
+      if (hasPastLogs) {
+        // End old, create new
+        const { error: endError } = await supabase
+          .from("foundations")
+          .update({ end_date: yesterday })
+          .eq("id", editingId);
+
+        if (endError) {
+          console.error("Error ending foundation", endError);
+          alert("Failed to update habit.");
+          setCreatingHabit(false);
+          return;
+        }
+
+        // Create new
+        const { data: newF, error: createError } = await supabase
+          .from("foundations")
+          .insert({
+            user_id: auth.user.id,
+            title: newTitle.trim(),
+            schedule_type: newSchedule,
+            x_per_week: newSchedule === "xPerWeek" ? newXPerWeek : null,
+            start_date: selectedDate, // Starts today
+            end_date: null,
+          })
+          .select("*")
+          .single();
+
+        if (createError) {
+          console.error("Error creating new version", createError);
+        } else if (newF) {
+          setFoundations(prev => [
+            ...prev.filter(f => f.id !== editingId), // Remove old (it ended yesterday)
+            newF as Foundation
+          ]);
+        }
+      } else {
+        // No past logs, just update in place
+        const { data: updatedF, error: updateError } = await supabase
+          .from("foundations")
+          .update({
+            title: newTitle.trim(),
+            schedule_type: newSchedule,
+            x_per_week: newSchedule === "xPerWeek" ? newXPerWeek : null,
+          })
+          .eq("id", editingId)
+          .select("*")
+          .single();
+
+        if (updateError) {
+          console.error("Error updating foundation", updateError);
+        } else if (updatedF) {
+          setFoundations(prev => prev.map(f => f.id === editingId ? (updatedF as Foundation) : f));
+        }
+      }
+
+      setEditingId(null);
+    } else {
+      // CREATE MODE
+      const insert = {
+        user_id: auth.user.id,
+        title: newTitle.trim(),
+        schedule_type: newSchedule,
+        x_per_week: newSchedule === "xPerWeek" ? newXPerWeek : null,
+        start_date: selectedDate,
+        end_date: null,
+      };
+
+      const { data, error } = await supabase
+        .from("foundations")
+        .insert(insert)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.error("Error creating foundation", error);
+        alert(`Error creating habit: ${error.message}`);
+      } else if (data) {
+        setFoundations((prev) => [...prev, data as Foundation]);
+      }
     }
 
-    setFoundations((prev) => [...prev, data as Foundation]);
+    setCreatingHabit(false);
     setNewTitle("");
     setNewSchedule("daily");
     setNewXPerWeek(3);
@@ -992,7 +1094,7 @@ export default function FoundationPage() {
               </div>
 
               <button
-                onClick={handleCreateFoundation}
+                onClick={handleSaveFoundation}
                 disabled={creatingHabit}
                 className="mt-3 w-full rounded-full bg-app-accent py-1.5 text-xs font-semibold text-app-accent-text disabled:opacity-60"
               >
@@ -1088,7 +1190,13 @@ export default function FoundationPage() {
                         </button>
                       </div>
 
-                      <div className="relative">
+                      <div className="relative flex items-center gap-2">
+                        <button
+                          onClick={() => handleEditFoundation(f)}
+                          className="text-[10px] text-app-muted hover:text-app-accent-color px-1"
+                        >
+                          Edit
+                        </button>
                         {deletingId === f.id ? (
                           <span className="text-[10px] text-red-400 animate-pulse">...</span>
                         ) : (
@@ -1124,64 +1232,82 @@ export default function FoundationPage() {
       {showOnboarding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl bg-app-card p-6 shadow-2xl ring-1 ring-app-border">
-            <h2 className="mb-2 text-xl font-bold text-app-main">
-              Welcome to Foundation
-            </h2>
-            <p className="mb-6 text-sm text-app-muted">
-              Let’s set up your AI coach.
-            </p>
-
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-app-muted uppercase tracking-wide">
-                  Top 3 Priorities
-                </label>
-                <input
-                  className="w-full rounded-xl border border-app-border bg-app-input px-4 py-3 text-sm text-app-main outline-none focus:border-app-accent transition-colors"
-                  placeholder="e.g. Health, Startup, Family"
-                  value={onboarding.priorities}
-                  onChange={(e) =>
-                    handleOnboardingChange("priorities", e.target.value)
+            {onboardingStep === 0 ? (
+              <OnboardingInterest
+                onNext={(selection) => {
+                  setInterestSelection(selection);
+                  // Persist settings immediately
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("foundation_show_plans", String(selection.goals));
+                    localStorage.setItem("foundation_show_journal", String(selection.journal));
                   }
-                />
-              </div>
+                  setOnboardingStep(1);
+                }}
+              />
+            ) : (
+              <>
+                <h2 className="mb-2 text-xl font-bold text-app-main">
+                  Welcome to Cherry
+                </h2>
+                <p className="mb-6 text-sm text-app-muted">
+                  Let’s set up your AI coach.
+                </p>
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-app-muted uppercase tracking-wide">
-                  Life Summary & 10-Year Vision
-                </label>
-                <textarea
-                  className="h-24 w-full resize-none rounded-xl border border-app-border bg-app-input px-4 py-3 text-sm text-app-main outline-none focus:border-app-accent transition-colors"
-                  placeholder="Where are you now? Where do you want to be?"
-                  value={onboarding.lifeSummary}
-                  onChange={(e) =>
-                    handleOnboardingChange("lifeSummary", e.target.value)
-                  }
-                />
-              </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-app-muted uppercase tracking-wide">
+                      Top 3 Priorities
+                    </label>
+                    <input
+                      className="w-full rounded-xl border border-app-border bg-app-input px-4 py-3 text-sm text-app-main outline-none focus:border-app-accent transition-colors"
+                      placeholder="e.g. Health, Startup, Family"
+                      value={onboarding.priorities}
+                      onChange={(e) =>
+                        handleOnboardingChange("priorities", e.target.value)
+                      }
+                    />
+                  </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-app-muted uppercase tracking-wide">
-                  Ideology / Worldview (Optional)
-                </label>
-                <input
-                  className="w-full rounded-xl border border-app-border bg-app-input px-4 py-3 text-sm text-app-main outline-none focus:border-app-accent transition-colors"
-                  placeholder="e.g. Stoicism, Christianity, Tech-Optimism"
-                  value={onboarding.ideology}
-                  onChange={(e) =>
-                    handleOnboardingChange("ideology", e.target.value)
-                  }
-                />
-              </div>
-            </div>
+                  {interestSelection.goals && (
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-app-muted uppercase tracking-wide">
+                        Life Summary & 10-Year Vision
+                      </label>
+                      <textarea
+                        className="h-24 w-full resize-none rounded-xl border border-app-border bg-app-input px-4 py-3 text-sm text-app-main outline-none focus:border-app-accent transition-colors"
+                        placeholder="Where are you now? Where do you want to be?"
+                        value={onboarding.lifeSummary}
+                        onChange={(e) =>
+                          handleOnboardingChange("lifeSummary", e.target.value)
+                        }
+                      />
+                    </div>
+                  )}
 
-            <button
-              onClick={handleOnboardingSubmit}
-              disabled={savingOnboarding}
-              className="mt-8 w-full rounded-full bg-app-accent py-3 text-sm font-bold text-app-accent-text hover:opacity-90 disabled:opacity-50 transition-opacity"
-            >
-              {savingOnboarding ? "Generating Plan..." : "Create My Plan"}
-            </button>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-app-muted uppercase tracking-wide">
+                      Ideology / Worldview (Optional)
+                    </label>
+                    <input
+                      className="w-full rounded-xl border border-app-border bg-app-input px-4 py-3 text-sm text-app-main outline-none focus:border-app-accent transition-colors"
+                      placeholder="e.g. Stoicism, Christianity, Tech-Optimism"
+                      value={onboarding.ideology}
+                      onChange={(e) =>
+                        handleOnboardingChange("ideology", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleOnboardingSubmit}
+                  disabled={savingOnboarding}
+                  className="mt-8 w-full rounded-full bg-app-accent py-3 text-sm font-bold text-app-accent-text hover:opacity-90 disabled:opacity-50 transition-opacity"
+                >
+                  {savingOnboarding ? "Generating Plan..." : "Create My Plan"}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

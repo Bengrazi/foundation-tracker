@@ -81,6 +81,53 @@
     --danger: #ef4444;
     --danger-bg: #fee2e2;
   }
+
+  [data-theme="cherry"] {
+    /* Cherry (Red-tone Sunshine - Standard) */
+    --bg-main: #fff1f2;
+    /* rose-50 */
+    --bg-card: #ffe4e6;
+    /* rose-100 */
+    --bg-card-hover: #fecdd3;
+    /* rose-200 */
+    --bg-input: #ffffff;
+    --text-main: #881337;
+    /* rose-900 */
+    --text-muted: #be123c;
+    /* rose-700 */
+    --border: #fda4af;
+    /* rose-300 */
+    --accent: #e11d48;
+    /* rose-600 */
+    --accent-hover: #be123c;
+    /* rose-700 */
+    --accent-text: #ffffff;
+    --danger: #ef4444;
+    --danger-bg: #fee2e2;
+  }
+
+  [data-theme="cherry-dark"] {
+    /* Cherry Dark (Dark with Red/Green highlights) */
+    --bg-main: #0f0505;
+    /* very dark red/black */
+    --bg-card: #1c0a0a;
+    /* dark red/black */
+    --bg-card-hover: #2b0f0f;
+    --bg-input: rgba(28, 10, 10, 0.7);
+    --text-main: #ffe4e6;
+    /* rose-100 */
+    --text-muted: #fda4af;
+    /* rose-300 */
+    --border: #4c0519;
+    /* rose-950 */
+    --accent: #e11d48;
+    /* rose-600 (Cherry) */
+    --accent-hover: #16a34a;
+    /* green-600 (Stem - fun hover) */
+    --accent-text: #ffffff;
+    --danger: #ef4444;
+    --danger-bg: rgba(69, 10, 10, 0.4);
+  }
 }
 
 html,

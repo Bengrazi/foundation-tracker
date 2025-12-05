@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
 import { ChatWidget } from "@/components/ChatWidget";
 import { applySavedTextSize } from "@/lib/textSize";
+import { DailyAIQuestion } from "@/components/DailyAIQuestion";
 
 type Mood = 1 | 2 | 3 | 4 | 5;
 
@@ -24,9 +25,15 @@ export default function ReflectPage() {
   const [mood, setMood] = useState<Mood | null>(null);
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showJournal, setShowJournal] = useState(true);
+  const [showAIQuestion, setShowAIQuestion] = useState(false);
 
   useEffect(() => {
     applySavedTextSize();
+    if (typeof window !== "undefined") {
+      setShowJournal(localStorage.getItem("foundation_show_journal") !== "false");
+      setShowAIQuestion(localStorage.getItem("foundation_daily_ai_question_enabled") === "true");
+    }
   }, []);
 
   useEffect(() => {
@@ -120,51 +127,55 @@ export default function ReflectPage() {
           />
         </header>
 
-        <section className="mb-4 rounded-2xl border border-app-border bg-app-card p-4">
-          <p className="mb-2 text-xs text-app-muted">
-            How are you feeling today?
-          </p>
-          <div className="flex gap-2">
-            {moods.map((m) => {
-              const active = mood === m.value;
-              return (
-                <button
-                  key={m.value}
-                  onClick={() => setMood(m.value)}
-                  className={`flex h-9 w-9 items-center justify-center rounded-full border text-lg ${active
-                    ? "border-app-accent bg-app-accent/10"
-                    : "border-app-border bg-app-input"
-                    }`}
-                >
-                  {m.emoji}
-                </button>
-              );
-            })}
-          </div>
+        {showJournal && (
+          <section className="mb-4 rounded-2xl border border-app-border bg-app-card p-4">
+            <p className="mb-2 text-xs text-app-muted">
+              How are you feeling today?
+            </p>
+            <div className="flex gap-2">
+              {moods.map((m) => {
+                const active = mood === m.value;
+                return (
+                  <button
+                    key={m.value}
+                    onClick={() => setMood(m.value)}
+                    className={`flex h-9 w-9 items-center justify-center rounded-full border text-lg ${active
+                      ? "border-app-accent bg-app-accent/10"
+                      : "border-app-border bg-app-input"
+                      }`}
+                  >
+                    {m.emoji}
+                  </button>
+                );
+              })}
+            </div>
 
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Share about your day..."
-            className="mt-4 w-full min-h-[120px] rounded-xl border border-app-border bg-app-input px-3 py-2 text-xs text-app-main"
-          />
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Share about your day..."
+              className="mt-4 w-full min-h-[120px] rounded-xl border border-app-border bg-app-input px-3 py-2 text-xs text-app-main"
+            />
 
-          <p className="mt-2 text-[10px] text-app-muted flex items-center gap-1">
-            <span>🔒</span>
-            <span>
-              Your reflections are private and only used to personalize your AI
-              responses.
-            </span>
-          </p>
+            <p className="mt-2 text-[10px] text-app-muted flex items-center gap-1">
+              <span>🔒</span>
+              <span>
+                Your reflections are private and only used to personalize your AI
+                responses.
+              </span>
+            </p>
 
-          <button
-            onClick={saveReflection}
-            disabled={saving}
-            className="mt-4 w-full rounded-full bg-app-accent py-1.5 text-xs font-semibold text-app-accent-text disabled:opacity-60"
-          >
-            {saving ? "Saving..." : "Save entry"}
-          </button>
-        </section>
+            <button
+              onClick={saveReflection}
+              disabled={saving}
+              className="mt-4 w-full rounded-full bg-app-accent py-1.5 text-xs font-semibold text-app-accent-text disabled:opacity-60"
+            >
+              {saving ? "Saving..." : "Save entry"}
+            </button>
+          </section>
+        )}
+
+        {showAIQuestion && <DailyAIQuestion />}
 
         <div className="mt-6">
           <ChatWidget />
