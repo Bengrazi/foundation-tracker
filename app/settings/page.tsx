@@ -50,6 +50,9 @@ export default function SettingsPage() {
   const [textSize, setTextSizeState] = useState<TextSize>("small");
   const [theme, setThemeState] = useState<Theme>("dark");
   const [aiCoachEnabled, setAiCoachEnabled] = useState(true);
+  const [showPlans, setShowPlans] = useState(true);
+  const [showJournal, setShowJournal] = useState(true);
+  const [dailyAiQuestionEnabled, setDailyAiQuestionEnabled] = useState(false);
 
   useEffect(() => {
     applySavedTextSize();
@@ -60,6 +63,10 @@ export default function SettingsPage() {
       if (savedCoach !== null) {
         setAiCoachEnabled(savedCoach === "true");
       }
+
+      setShowPlans(localStorage.getItem("foundation_show_plans") !== "false");
+      setShowJournal(localStorage.getItem("foundation_show_journal") !== "false");
+      setDailyAiQuestionEnabled(localStorage.getItem("foundation_daily_ai_question_enabled") === "true");
 
       const savedTextSize = localStorage.getItem("foundation_ui_text_size_v1") as TextSize | null;
       if (savedTextSize) setTextSizeState(savedTextSize);
@@ -380,9 +387,11 @@ export default function SettingsPage() {
             <label className="relative inline-flex cursor-pointer items-center">
               <input
                 type="checkbox"
-                checked={localStorage.getItem("foundation_show_plans") !== "false"}
+                checked={showPlans}
                 onChange={(e) => {
-                  localStorage.setItem("foundation_show_plans", String(e.target.checked));
+                  const val = e.target.checked;
+                  setShowPlans(val);
+                  localStorage.setItem("foundation_show_plans", String(val));
                   window.location.reload(); // Reload to update nav
                 }}
                 className="peer sr-only"
@@ -399,9 +408,11 @@ export default function SettingsPage() {
             <label className="relative inline-flex cursor-pointer items-center">
               <input
                 type="checkbox"
-                checked={localStorage.getItem("foundation_show_journal") !== "false"}
+                checked={showJournal}
                 onChange={(e) => {
-                  localStorage.setItem("foundation_show_journal", String(e.target.checked));
+                  const val = e.target.checked;
+                  setShowJournal(val);
+                  localStorage.setItem("foundation_show_journal", String(val));
                   window.location.reload();
                 }}
                 className="peer sr-only"
@@ -418,12 +429,11 @@ export default function SettingsPage() {
             <label className="relative inline-flex cursor-pointer items-center">
               <input
                 type="checkbox"
-                checked={localStorage.getItem("foundation_daily_ai_question_enabled") === "true"}
+                checked={dailyAiQuestionEnabled}
                 onChange={(e) => {
-                  localStorage.setItem("foundation_daily_ai_question_enabled", String(e.target.checked));
-                  // Force re-render or just rely on page reload if needed, but here state update is local
-                  // We might need state for these to trigger re-render of this component
-                  // For now, reload is safest for global settings
+                  const val = e.target.checked;
+                  setDailyAiQuestionEnabled(val);
+                  localStorage.setItem("foundation_daily_ai_question_enabled", String(val));
                   window.location.reload();
                 }}
                 className="peer sr-only"
