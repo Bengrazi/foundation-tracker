@@ -29,7 +29,20 @@ export function AuthGuardHeader() {
     router.push("/login");
   };
 
-  if (checking) return null;
+  if (checking) {
+    // Return a skeleton placeholder to prevent layout shift
+    return (
+      <header className="mx-auto flex max-w-md items-center justify-between px-4 pt-4">
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-semibold tracking-wide text-app-muted uppercase">
+            Cherry
+          </span>
+          <div className="h-5 w-16 animate-pulse rounded-full bg-app-card" />
+        </div>
+        <div className="h-4 w-14 animate-pulse rounded bg-app-card" />
+      </header>
+    );
+  }
 
   return (
     <header className="mx-auto flex max-w-md items-center justify-between px-4 pt-4">

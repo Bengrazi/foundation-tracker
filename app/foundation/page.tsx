@@ -1033,8 +1033,36 @@ export default function FoundationPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-app-main text-app-muted">
-        Loading Foundation...
+      <div className="min-h-screen bg-app-main text-app-main pb-20 transition-colors duration-300">
+        <AuthGuardHeader />
+        <main className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-24 pt-2">
+          {/* Skeleton date header */}
+          <section className="mt-2 flex items-center justify-between">
+            <div>
+              <div className="h-3 w-12 bg-app-card animate-pulse rounded mb-2" />
+              <div className="h-6 w-36 bg-app-card animate-pulse rounded" />
+            </div>
+            <div className="h-8 w-28 bg-app-card animate-pulse rounded-full" />
+          </section>
+
+          {/* Skeleton intention card */}
+          <div className="rounded-2xl border border-app-border bg-app-card p-4">
+            <div className="h-4 w-24 bg-app-card-hover animate-pulse rounded mb-3" />
+            <div className="h-12 bg-app-card-hover animate-pulse rounded" />
+          </div>
+
+          {/* Skeleton habits */}
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-2xl border border-app-border bg-app-card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 bg-app-card-hover animate-pulse rounded-full" />
+                  <div className="h-4 w-32 bg-app-card-hover animate-pulse rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </main>
       </div>
     );
   }

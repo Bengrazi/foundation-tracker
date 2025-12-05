@@ -8,12 +8,10 @@ import { applySavedTextSize } from "@/lib/textSize";
 
 export default function ResetPasswordPage() {
     const router = useRouter();
-    const [currentPassword, setCurrentPassword] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [checkingAuth, setCheckingAuth] = useState(true);
-    const [userEmail, setUserEmail] = useState<string | null>(null);
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
     useEffect(() => {
@@ -24,8 +22,6 @@ export default function ResetPasswordPage() {
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (!session) {
                 router.push("/login");
-            } else {
-                setUserEmail(session.user.email || null);
             }
             setCheckingAuth(false);
         });
@@ -35,7 +31,7 @@ export default function ResetPasswordPage() {
         e.preventDefault();
 
         if (password !== confirmPassword) {
-            setMessage({ type: "error", text: "New passwords do not match." });
+            setMessage({ type: "error", text: "Passwords do not match." });
             return;
         }
 
@@ -48,21 +44,6 @@ export default function ResetPasswordPage() {
         setMessage(null);
 
         try {
-            // First, verify current password by re-authenticating
-            if (userEmail && currentPassword) {
-                const { error: signInError } = await supabase.auth.signInWithPassword({
-                    email: userEmail,
-                    password: currentPassword,
-                });
-
-                if (signInError) {
-                    setMessage({ type: "error", text: "Current password is incorrect." });
-                    setLoading(false);
-                    return;
-                }
-            }
-
-            // Update to new password
             const { error } = await supabase.auth.updateUser({
                 password: password,
             });
@@ -94,25 +75,11 @@ export default function ResetPasswordPage() {
                 <div className="text-center">
                     <h2 className="text-3xl font-black tracking-tighter">Change Password</h2>
                     <p className="mt-2 text-sm text-app-muted">
-                        Enter your current password and choose a new one.
+                        Enter your new password below.
                     </p>
                 </div>
 
                 <form onSubmit={handleChangePassword} className="space-y-4">
-                    <div>
-                        <label className="block text-xs text-app-muted mb-1">Current Password</label>
-                        <input
-                            type="password"
-                            required
-                            placeholder="Enter current password"
-                            value={currentPassword}
-                            onChange={(e) => setCurrentPassword(e.target.value)}
-                            className="w-full rounded-xl border border-app-border bg-app-input px-4 py-3 text-sm text-app-main outline-none focus:border-app-accent transition-colors placeholder-app-muted/50"
-                        />
-                    </div>
-
-                    <hr className="border-app-border" />
-
                     <div>
                         <label className="block text-xs text-app-muted mb-1">New Password</label>
                         <input

@@ -45,7 +45,14 @@ export function PointsDisplay() {
         };
     }, []);
 
-    if (points === null) return null;
+    if (points === null) {
+        return (
+            <div className="flex items-center gap-1.5 rounded-full bg-app-card px-3 py-1 text-xs font-medium text-app-main shadow-sm border border-app-border">
+                <span className="text-base">🍒</span>
+                <span className="w-8 h-3 bg-app-card-hover animate-pulse rounded" />
+            </div>
+        );
+    }
 
     return (
         <div className="flex items-center gap-1.5 rounded-full bg-app-card px-3 py-1 text-xs font-medium text-app-main shadow-sm border border-app-border">
