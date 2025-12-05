@@ -228,6 +228,7 @@ export default function FoundationPage() {
 
   const [dailyIntention, setDailyIntention] = useState<DailyIntention | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>("");
+  const [themeState, setThemeState] = useState<string>("cherry");
 
   const DEFAULT_INTENTION: DailyIntention = {
     id: "default",
@@ -241,6 +242,11 @@ export default function FoundationPage() {
   useEffect(() => {
     applySavedTextSize();
     applySavedTheme();
+
+    // Initialize theme state from localStorage
+    if (typeof window !== "undefined") {
+      setThemeState(localStorage.getItem("foundation_theme") || "cherry");
+    }
 
     const checkOnboarding = async () => {
       if (typeof window === "undefined") return;
@@ -541,7 +547,15 @@ export default function FoundationPage() {
 
         if (res.ok) {
           const data = await res.json();
-          setCelebrationMessage(data.message);
+          let msg = data.message;
+
+          // Append points if applicable
+          if (trigger === "habit_streak") {
+            if (count === 7) msg += ` (+${POINTS.STREAK_BONUS_7} Cherry)`;
+            else if (count === 30) msg += ` (+${POINTS.STREAK_BONUS_30} Cherry)`;
+          }
+
+          setCelebrationMessage(msg);
           setShowCelebration(true);
         } else {
           console.error("[Celebration Error] API returned:", res.status);
@@ -652,7 +666,8 @@ export default function FoundationPage() {
         const { points: earned } = await awardPoints(auth.user.id, POINTS.HABIT_COMPLETION, "habit_completion", foundation.id);
         if (earned > 0) {
           setPoints((prev) => prev + earned);
-          triggerCelebration(`+${earned} Cherry!`);
+          // Only trigger celebration for streaks, not just points
+          // triggerCelebration(`+${earned} Cherry!`); 
         }
 
         // Streak bonuses
@@ -663,6 +678,16 @@ export default function FoundationPage() {
         if (newStreak === 30) {
           const { points: bonus } = await awardPoints(auth.user.id, POINTS.STREAK_BONUS_30, "streak_bonus_30", foundation.id);
           if (bonus > 0) setPoints((prev) => prev + bonus);
+        }
+      }
+    } else {
+      // Deduct points if unchecked
+      const { data: auth } = await supabase.auth.getUser();
+      if (auth?.user) {
+        const deduction = -POINTS.HABIT_COMPLETION;
+        const { points: adjusted } = await awardPoints(auth.user.id, deduction, "habit_undo", foundation.id);
+        if (adjusted !== 0) {
+          setPoints((prev) => prev + adjusted);
         }
       }
     }
@@ -920,6 +945,7 @@ export default function FoundationPage() {
     if (!onboarding.priorities.trim()) {
       return;
     }
+    // Only check lifeSummary if Goals are selected
     if (interestSelection.goals && !onboarding.lifeSummary.trim()) {
       return;
     }
@@ -1053,7 +1079,8 @@ export default function FoundationPage() {
 
         {/* Gold Streak Display */}
         <div className="mb-2 flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-full bg-yellow-500/10 px-6 py-2 text-sm font-bold text-yellow-700 ring-1 ring-inset ring-yellow-500/20">
+          <div className={`inline-flex items-center gap-2 rounded-full bg-yellow-500/10 px-6 py-2 text-sm font-bold ring-1 ring-inset ring-yellow-500/20 ${themeState === "dark" || themeState === "cherry-dark" ? "text-yellow-500" : "text-yellow-700"
+            }`}>
             <span>🏆</span>
             <span>Gold Streak: {goldStreak} {goldStreak === 1 ? "day" : "days"}</span>
           </div>
@@ -1170,7 +1197,7 @@ export default function FoundationPage() {
               );
 
               let ringClass = "ring-1 ring-app-border";
-              if (allDone) ringClass = "gold-racetrack shadow-[0_0_15px_rgba(234,179,8,0.4)]";
+              if (allDone) ringClass = "gold-racetrack shadow-[0_0_15px_rgba(234,179,8,0.6)] border-yellow-500";
               else if (completed) ringClass = "ring-1 ring-green-500";
 
               return (
@@ -1185,7 +1212,7 @@ export default function FoundationPage() {
                       onClick={() => handleToggleFoundation(f)}
                       className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border transition-colors ${completed
                         ? allDone
-                          ? "border-yellow-500 bg-yellow-500 text-app-main"
+                          ? "border-yellow-500 bg-yellow-500 text-app-main shadow-[0_0_10px_rgba(234,179,8,0.6)]"
                           : "border-app-accent bg-app-accent text-app-accent-text"
                         : "border-app-border bg-app-input text-app-muted"
                         }`}

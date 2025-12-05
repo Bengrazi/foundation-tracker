@@ -476,6 +476,35 @@ export default function SettingsPage() {
           </p>
         </section>
 
+        {/* Account */}
+        <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
+          <h2 className="text-sm font-semibold text-app-main">Account</h2>
+          <p className="text-xs text-app-muted">
+            Manage your account settings.
+          </p>
+          <button
+            type="button"
+            onClick={async () => {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user?.email) {
+                const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+                  redirectTo: `${window.location.origin}/auth/reset-password`,
+                });
+                if (error) {
+                  alert("Error sending reset email: " + error.message);
+                } else {
+                  alert("Password reset email sent! Check your inbox.");
+                }
+              } else {
+                alert("Could not find your email address.");
+              }
+            }}
+            className="w-full rounded-full bg-app-card-hover px-4 py-2 text-xs font-semibold text-app-main ring-1 ring-app-border hover:bg-app-card"
+          >
+            Reset Password
+          </button>
+        </section>
+
         {/* Reset */}
         <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-red-500/50">
           <h2 className="text-sm font-semibold text-red-400">Reset app</h2>

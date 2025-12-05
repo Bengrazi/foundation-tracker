@@ -88,3 +88,21 @@ drop policy if exists "Users can insert their own points history" on points_hist
 create policy "Users can insert their own points history"
   on points_history for insert
   with check (auth.uid() = user_id);
+
+-- RPC for atomic point updates (prevents race conditions)
+create or replace function increment_points(user_id_input uuid, amount_input int)
+returns void as $$
+begin
+  update profiles
+  set points = points + amount_input
+  where id = user_id_input;
+end;
+$$ language plpgsql security definer;
+
+-- Recalculate points from history to fix any discrepancies
+update profiles
+set points = (
+  select coalesce(sum(amount), 0)
+  from points_history
+  where points_history.user_id = profiles.id
+);
