@@ -38,7 +38,10 @@ export async function awardPoints(userId: string, amount: number, reason: string
             reference_id: referenceId,
         });
 
+        return { success: true, points: amount };
+
     } catch (e) {
         console.error("Error awarding points:", e);
+        return { success: false, points: 0 };
     }
 }

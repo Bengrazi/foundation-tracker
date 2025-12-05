@@ -281,9 +281,12 @@ export default function FoundationPage() {
       });
     };
     triggerPrecompute();
-
-    fetchIntention();
   }, [selectedDate]);
+
+  // Fetch Daily Intention on mount only (it's always for "today")
+  useEffect(() => {
+    fetchIntention();
+  }, []);
 
   // Fetch Daily Intention
   async function fetchIntention(force = false) {
@@ -637,15 +640,30 @@ export default function FoundationPage() {
         selectedDate
       );
 
+      const triggerCelebration = (msg: string) => {
+        setCelebrationMessage(msg);
+        setShowCelebration(true);
+      };
+
       // Award Points
       const { data: auth } = await supabase.auth.getUser();
       if (auth?.user) {
         // Base completion points
-        awardPoints(auth.user.id, POINTS.HABIT_COMPLETION, "habit_completion", foundation.id);
+        const { points: earned } = await awardPoints(auth.user.id, POINTS.HABIT_COMPLETION, "habit_completion", foundation.id);
+        if (earned > 0) {
+          setPoints((prev) => prev + earned);
+          triggerCelebration(`+${earned} Cherry!`);
+        }
 
         // Streak bonuses
-        if (newStreak === 7) awardPoints(auth.user.id, POINTS.STREAK_BONUS_7, "streak_bonus_7", foundation.id);
-        if (newStreak === 30) awardPoints(auth.user.id, POINTS.STREAK_BONUS_30, "streak_bonus_30", foundation.id);
+        if (newStreak === 7) {
+          const { points: bonus } = await awardPoints(auth.user.id, POINTS.STREAK_BONUS_7, "streak_bonus_7", foundation.id);
+          if (bonus > 0) setPoints((prev) => prev + bonus);
+        }
+        if (newStreak === 30) {
+          const { points: bonus } = await awardPoints(auth.user.id, POINTS.STREAK_BONUS_30, "streak_bonus_30", foundation.id);
+          if (bonus > 0) setPoints((prev) => prev + bonus);
+        }
       }
     }
 
@@ -1035,7 +1053,7 @@ export default function FoundationPage() {
 
         {/* Gold Streak Display */}
         <div className="mb-2 flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-full bg-yellow-500/10 px-6 py-2 text-sm font-bold text-yellow-500 ring-1 ring-inset ring-yellow-500/20">
+          <div className="inline-flex items-center gap-2 rounded-full bg-yellow-500/10 px-6 py-2 text-sm font-bold text-yellow-700 ring-1 ring-inset ring-yellow-500/20">
             <span>🏆</span>
             <span>Gold Streak: {goldStreak} {goldStreak === 1 ? "day" : "days"}</span>
           </div>

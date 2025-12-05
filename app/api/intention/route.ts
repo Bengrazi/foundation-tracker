@@ -45,7 +45,8 @@ export async function GET(req: Request) {
       .select("*")
       .eq("user_id", user.id)
       .eq("date", date)
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     if (existing) {
       return NextResponse.json(existing);
