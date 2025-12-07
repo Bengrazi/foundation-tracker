@@ -123,6 +123,7 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS text_size text DEFAULT 'sma
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS points int DEFAULT 0;
 ALTER TABLE public.foundations ADD COLUMN IF NOT EXISTS order_index int DEFAULT 0;
 ALTER TABLE public.goals ADD COLUMN IF NOT EXISTS order_index int DEFAULT 0;
+ALTER TABLE public.daily_intentions ADD COLUMN IF NOT EXISTS question text;
 
 -- ============================================
 -- 4. ENABLE ROW LEVEL SECURITY

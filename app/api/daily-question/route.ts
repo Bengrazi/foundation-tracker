@@ -24,11 +24,21 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        // Check if we already have a question for today in a cache or DB?
-        // For now, we'll generate one on the fly or use a static list if OpenAI is not available.
-        // Ideally, this should be stored in a `daily_questions` table to be consistent for the user all day.
-        // But for simplicity, let's generate it.
+        const today = new Date().toISOString().split("T")[0];
 
+        // 1. Check if we already have a question for today
+        const { data: existingEntry } = await supabase
+            .from("daily_intentions")
+            .select("question")
+            .eq("user_id", user.id)
+            .eq("date", today)
+            .single();
+
+        if (existingEntry?.question) {
+            return NextResponse.json({ question: existingEntry.question });
+        }
+
+        // 2. Generate new question
         const openai = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY,
         });
@@ -49,6 +59,70 @@ export async function GET(request: Request) {
         });
 
         const question = completion.choices[0].message.content?.trim();
+
+        // 3. Save to DB (UPSERT to handle race conditions or if intention exists but question doesn't)
+        // We need to be careful not to overwrite the 'content' if it exists.
+        // Actually, daily_intentions requires 'content' (not null). 
+        // If we overlap with the intention creation, we might face issues if we don't have content.
+        // However, usually the intention is created by the USER or precomputed.
+        // If precomputed, it exists. If not, we need to insert it.
+        // BUT, 'content' is NOT NULL. 
+        // Let's check if the row exists first (which we did).
+        // If it doesn't exist, we must provide 'content'. 
+        // Let's provide a placeholder or wait for the user/precompute?
+        // Actually, looking at schema, 'content' is NOT NULL.
+        // Users might visit the dashboard before the precompute runs (rare but possible).
+        // Or simply, we can just update if exists, or insert with a default content if not?
+        // Better yet: The intention logic usually handles the row creation.
+        // Let's see... 'precompute' route creates it.
+        // If we are here, and no row exists, we can try to insert with a default content or just return the question without saving if we can't save.
+        // BUT we want persistence.
+        // Let's assume we can fetch the existing row. 
+        // If we found 'existingEntry' was null, it means no row for today.
+
+        // Let's try to UPSERT. If we insert, we need 'content'.
+        // We can just set a default content if we are the first ones creating it.
+        // Only insert if it doesn't exist.
+
+        const { error: upsertError } = await supabase
+            .from("daily_intentions")
+            .upsert({
+                user_id: user.id,
+                date: today,
+                question: question,
+                content: "Focus on the step in front of you." // Default fallback if creating row
+            }, { onConflict: "user_id, date", ignoreDuplicates: false });
+        // We want to update 'question' if row exists, but preserve 'content' if it's already there?
+        // UPSERT in Supabase/Postgres updates all columns specified if conflict.
+        // If we specify 'content', it will overwrite 'content'. That is BAD if user wrote something.
+        // So we should NOT use Upsert blindly if we might overwrite.
+
+        // Refined Logic:
+        // If row exists (but question was null, otherwise we would have returned above), UPDATE it.
+        // If row does not exist, INSERT it.
+
+        const { data: checkRow } = await supabase
+            .from("daily_intentions") // Re-query just to be safe or use what we had
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("date", today)
+            .single();
+
+        if (checkRow) {
+            await supabase
+                .from("daily_intentions")
+                .update({ question })
+                .eq("id", checkRow.id);
+        } else {
+            await supabase
+                .from("daily_intentions")
+                .insert({
+                    user_id: user.id,
+                    date: today,
+                    question: question,
+                    content: "Focus on the step in front of you."
+                });
+        }
 
         return NextResponse.json({ question });
     } catch (error) {

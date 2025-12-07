@@ -35,17 +35,19 @@
 
   [data-theme="light"] {
     /* Light (Clean) */
-    --bg-main: #ffffff;
-    --bg-card: #f1f5f9;
+    --bg-main: #fcfbf9;
+    /* Warm off-white beige */
+    --bg-card: #f3f3f1;
+    /* Slightly darker beige for cards */
     /* slate-100 */
-    --bg-card-hover: #e2e8f0;
+    --bg-card-hover: #e7e7e5;
     /* slate-200 */
     --bg-input: #ffffff;
     --text-main: #0f172a;
     /* slate-900 */
     --text-muted: #64748b;
     /* slate-500 */
-    --border: #cbd5e1;
+    --border: #dcdcd9;
     /* slate-300 */
     --accent: #0f172a;
     /* slate-900 */
@@ -84,22 +86,25 @@
 
   [data-theme="cherry"] {
     /* Cherry (Red-tone Sunshine - Standard) */
-    --bg-main: #fef2f2;
+    --bg-main: #fff0f5;
+    /* More cherry/lavender blush tint */
     /* red-50 */
-    --bg-card: #ffffff;
-    --bg-card-hover: #fee2e2;
+    --bg-card: #fff9fa;
+    --bg-card-hover: #ffe4e8;
     /* red-100 */
-    --bg-input: #fff1f2;
+    --bg-input: #ffffff;
     /* red-50 */
     --text-main: #881337;
     /* rose-900 */
-    --text-muted: #991b1b;
-    /* red-800 - darker for contrast */
-    --border: #fecaca;
+    --text-muted: #9bd1bb;
+    /* teal-ish for contrast or keep red */
+    --text-muted: #9f1239;
+    /* darker red for muted text */
+    --border: #fca5a5;
     /* red-200 */
-    --accent: #dc2626;
-    /* red-600 */
-    --accent-hover: #b91c1c;
+    --accent: #e11d48;
+    /* rose-600 */
+    --accent-hover: #be123c;
     /* red-700 */
     --accent-text: #ffffff;
     --danger: #ef4444;

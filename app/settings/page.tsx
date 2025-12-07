@@ -284,82 +284,77 @@ export default function SettingsPage() {
           </p>
         </section>
 
-        {/* Theme */}
-        <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-app-main">
-              Theme
-            </h2>
+        {/* Appearance (Theme + Text Size combined) */}
+        <section className="space-y-4 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
+          <h2 className="text-sm font-semibold text-app-main">Appearance</h2>
+
+          {/* Theme */}
+          <div className="space-y-2">
+            <p className="text-xs text-app-muted">Theme</p>
+            <div className="flex gap-2">
+              {themeOptions.map((opt) => {
+                const active = opt.value === theme;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setTheme(opt.value);
+                      setThemeState(opt.value);
+                    }}
+                    className={
+                      "flex-1 rounded-full border px-3 py-1.5 text-xs transition " +
+                      (active
+                        ? "border-app-accent bg-app-accent text-app-accent-text"
+                        : "border-app-border bg-app-card text-app-muted hover:border-app-accent")
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <p className="text-xs text-app-muted">
-            Choose your preferred visual style.
-          </p>
-          <div className="flex gap-2">
-            {themeOptions.map((opt) => {
-              const active = opt.value === theme;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => {
-                    setTheme(opt.value);
-                    setThemeState(opt.value);
-                  }}
-                  className={
-                    "flex-1 rounded-full border px-3 py-1.5 text-xs transition " +
-                    (active
-                      ? "border-app-accent bg-app-accent text-app-accent-text"
-                      : "border-app-border bg-app-card text-app-muted hover:border-app-accent")
-                  }
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
+
+          {/* Text Size */}
+          <div className="space-y-2 pt-2 border-t border-app-border/50">
+            <p className="text-xs text-app-muted">Text size</p>
+            <div className="flex gap-2">
+              {textSizeOptions.map((opt) => {
+                const active = opt.value === textSize;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setTextSize(opt.value);
+                      setTextSizeState(opt.value);
+                    }}
+                    className={
+                      "flex-1 rounded-full border px-3 py-1.5 text-xs transition " +
+                      (active
+                        ? "border-app-accent bg-app-accent text-app-accent-text"
+                        : "border-app-border bg-app-card text-app-muted hover:border-app-accent")
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </section>
 
-        {/* Text size */}
+        {/* Features */}
         <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-app-main">
-              Text size
-            </h2>
-          </div>
-          <p className="text-xs text-app-muted">
-            Adjust the font size for better readability.
-          </p>
-          <div className="flex gap-2">
-            {textSizeOptions.map((opt) => {
-              const active = opt.value === textSize;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => {
-                    setTextSize(opt.value);
-                    setTextSizeState(opt.value);
-                  }}
-                  className={
-                    "flex-1 rounded-full border px-3 py-1.5 text-xs transition " +
-                    (active
-                      ? "border-app-accent bg-app-accent text-app-accent-text"
-                      : "border-app-border bg-app-card text-app-muted hover:border-app-accent")
-                  }
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-        </section>
+          <h2 className="text-sm font-semibold text-app-main">Features</h2>
 
-        {/* AI Coach */}
-        <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
+          {/* AI Coach */}
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-app-main">
-              AI Coach
-            </h2>
+            <div>
+              <div className="text-xs font-medium text-app-main">AI Coach</div>
+              <div className="text-[10px] text-app-muted">Enable pop-ups to celebrate streaks</div>
+            </div>
             <label className="relative inline-flex cursor-pointer items-center">
               <input
                 type="checkbox"
@@ -367,17 +362,9 @@ export default function SettingsPage() {
                 onChange={(e) => handleAiCoachToggle(e.target.checked)}
                 className="peer sr-only"
               />
-              <div className={`peer h-5 w-9 rounded-full ${aiCoachEnabled ? 'bg-green-500/30 ring-green-500/50' : 'bg-red-400/30 ring-red-400/50'} ring-1 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-green-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none`}></div>
+              <div className="peer h-5 w-9 rounded-full bg-app-card-hover ring-1 ring-app-border after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-app-accent peer-checked:after:translate-x-full"></div>
             </label>
           </div>
-          <p className="text-xs text-app-muted">
-            Enable AI pop-ups to celebrate your habit streaks.
-          </p>
-        </section>
-
-        {/* Features */}
-        <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
-          <h2 className="text-sm font-semibold text-app-main">Features</h2>
 
           <div className="flex items-center justify-between">
             <div>
