@@ -7,6 +7,8 @@ import { AuthGuardHeader } from "@/components/AuthGuardHeader";
 import { ChatWidget } from "@/components/ChatWidget";
 import { applySavedTextSize } from "@/lib/textSize";
 import { DailyAIQuestion } from "@/components/DailyAIQuestion";
+import { awardPoints, POINTS } from "@/lib/points";
+import { useGlobalState } from "@/components/GlobalStateProvider";
 
 type Mood = 1 | 2 | 3 | 4 | 5;
 
@@ -19,6 +21,7 @@ interface Reflection {
 }
 
 export default function ReflectPage() {
+  const { refreshPoints } = useGlobalState();
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), "yyyy-MM-dd")
   );
@@ -28,6 +31,10 @@ export default function ReflectPage() {
   const [saving, setSaving] = useState(false);
   const [showJournal, setShowJournal] = useState(true);
   const [showAIQuestion, setShowAIQuestion] = useState(false);
+
+  // Track if we've already earned points for today's entry to avoid duplicates
+  const [hasReflected, setHasReflected] = useState(false);
+  const [hasAnswered, setHasAnswered] = useState(false);
 
   const SEPARATOR = "\n\n--- Daily Question Answer ---\n";
 
@@ -60,18 +67,32 @@ export default function ReflectPage() {
       const r = data as Reflection;
       setMood(r.mood);
       const fullText = r.text ?? "";
+
+      let loadedText = "";
+      let loadedAnswer = "";
+
       if (fullText.includes(SEPARATOR)) {
         const parts = fullText.split(SEPARATOR);
-        setText(parts[0]);
-        setAnswer(parts[1]);
+        loadedText = parts[0];
+        loadedAnswer = parts[1];
+        setText(loadedText);
+        setAnswer(loadedAnswer);
       } else {
-        setText(fullText);
+        loadedText = fullText;
+        setText(loadedText);
         setAnswer("");
       }
+
+      // Determine initial point status based on content existence
+      setHasReflected(!!loadedText.trim() || !!r.mood);
+      setHasAnswered(!!loadedAnswer.trim());
+
     } else {
       setMood(null);
       setText("");
       setAnswer("");
+      setHasReflected(false);
+      setHasAnswered(false);
     }
   }
 
@@ -101,14 +122,41 @@ export default function ReflectPage() {
       .select("*")
       .single();
 
-    setSaving(false);
+    if (!error && data) {
+      // Award Points Logic
+      let pointsAwarded = 0;
+      const promises = [];
 
-    if (error) {
+      // 1. Reflection Points
+      // If we hadn't reflected before, and now we have some text or mood
+      const isReflectingNow = !!text.trim() || !!mood;
+      if (!hasReflected && isReflectingNow) {
+        promises.push(awardPoints(user.id, POINTS.REFLECTION, "daily_reflection", selectedDate));
+        setHasReflected(true);
+        pointsAwarded += POINTS.REFLECTION;
+      }
+
+      // 2. Question Points
+      // If we hadn't answered before, and now we have an answer
+      const isAnsweringNow = !!answer.trim();
+      if (!hasAnswered && isAnsweringNow) {
+        promises.push(awardPoints(user.id, POINTS.DAILY_QUESTION, "daily_question", selectedDate));
+        setHasAnswered(true);
+        pointsAwarded += POINTS.DAILY_QUESTION;
+      }
+
+      if (promises.length > 0) {
+        await Promise.all(promises);
+        await refreshPoints();
+      }
+
+      alert(pointsAwarded > 0 ? `Saved! +${pointsAwarded} Cherries 🍒` : "Reflection saved!");
+    } else if (error) {
       console.error("Error saving reflection", error);
       alert(`Error saving reflection: ${error.message}`);
-    } else if (data) {
-      alert("Reflection saved!");
     }
+
+    setSaving(false);
   }
 
   const moods: { value: Mood; label: string; emoji: string }[] = [

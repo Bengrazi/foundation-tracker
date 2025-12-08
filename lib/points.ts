@@ -5,6 +5,7 @@ export const POINTS = {
     STREAK_BONUS_7: 50,
     STREAK_BONUS_30: 200,
     REFLECTION: 20,
+    DAILY_QUESTION: 20,
 };
 
 export async function awardPoints(userId: string, amount: number, reason: string, referenceId?: string) {

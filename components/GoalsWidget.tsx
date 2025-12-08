@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import { applySavedTextSize } from "@/lib/textSize";
+import { awardPoints, POINTS } from "@/lib/points";
+import { useGlobalState } from "./GlobalStateProvider";
 
 type Horizon = "3y" | "1y" | "6m" | "1m";
 type GoalStatus = "not_started" | "in_progress" | "achieved";
@@ -19,12 +21,14 @@ interface Goal {
 }
 
 export function GoalsWidget() {
+    const { refreshPoints } = useGlobalState();
     const [goals, setGoals] = useState<Goal[]>([]);
     const [hideCompleted, setHideCompleted] = useState(false);
     const [loading, setLoading] = useState(true);
     const [showNewGoal, setShowNewGoal] = useState(false);
 
-    const [newHorizon, setNewHorizon] = useState<Horizon>("3y");
+    // Default to "1m" (Weekly) for new goals as it's the top priority now
+    const [newHorizon, setNewHorizon] = useState<Horizon>("1m");
     const [newTitle, setNewTitle] = useState("");
     const [newDate, setNewDate] = useState(format(new Date(), "yyyy-MM-dd"));
     const [newStatus, setNewStatus] = useState<GoalStatus>("not_started");
@@ -140,6 +144,31 @@ export function GoalsWidget() {
         setShowNewGoal(true);
     }
 
+    async function handleStatusChange(goal: Goal, newStatus: GoalStatus) {
+        // Optimistic update
+        setGoals((prev) =>
+            prev.map((g) =>
+                g.id === goal.id
+                    ? { ...goal, status: newStatus }
+                    : g
+            )
+        );
+
+        // Award points if completing
+        if (goal.status !== "achieved" && newStatus === "achieved") {
+            // Check if we already awarded for this? Use local storage or just trust standard logic?
+            // Simple logic: Award 50 points for a goal!
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                await awardPoints(user.id, 50, "goal_achieved", goal.id);
+                refreshPoints(); // Update global state
+            }
+        }
+
+        // Persist
+        await supabase.from("goals").update({ status: newStatus }).eq("id", goal.id);
+    }
+
     async function moveGoal(goal: Goal, direction: "up" | "down") {
         const group = goals
             .filter((g) => g.horizon === goal.horizon)
@@ -204,7 +233,9 @@ export function GoalsWidget() {
                 className="rounded-2xl border border-app-border bg-app-card p-4 mb-3 text-xs text-app-main"
             >
                 <div className="flex justify-between gap-3">
-                    <p className="text-app-main font-medium break-words">{goal.title}</p>
+                    <p className={`text-app-main font-bold text-sm break-words ${goal.status === 'achieved' ? 'line-through opacity-50' : ''}`}>
+                        {goal.title}
+                    </p>
                     <div className="flex items-center gap-1">
                         <button
                             onClick={() => moveGoal(goal, "up")}
@@ -223,20 +254,12 @@ export function GoalsWidget() {
 
                 <div className="mt-2 flex items-center justify-between gap-2">
                     <span className="text-app-muted text-[11px]">
-                        {format(parseISO(goal.target_date), "yyyy-MM-dd")} (est.)
+                        Target: {format(parseISO(goal.target_date), "MMM d, yyyy")}
                     </span>
 
                     <select
                         value={goal.status}
-                        onChange={(e) =>
-                            setGoals((prev) =>
-                                prev.map((g) =>
-                                    g.id === goal.id
-                                        ? { ...goal, status: e.target.value as GoalStatus }
-                                        : g
-                                )
-                            )
-                        }
+                        onChange={(e) => handleStatusChange(goal, e.target.value as GoalStatus)}
                         className="rounded bg-app-input border border-app-border px-2 py-1 text-[10px] text-app-main"
                     >
                         <option value="not_started">Not started</option>
@@ -259,7 +282,7 @@ export function GoalsWidget() {
         <div className="mt-6">
             <header className="mb-5 flex items-center justify-between">
                 <div>
-                    <h1 className="text-lg font-semibold text-app-main">Goals</h1>
+                    <h1 className="text-lg font-semibold text-app-main">Plan & Conquer</h1>
                     <label className="mt-1 flex items-center gap-2 text-[11px] text-app-muted">
                         <input
                             type="checkbox"
@@ -286,7 +309,7 @@ export function GoalsWidget() {
                         }}
                         className="rounded-full border border-app-border bg-app-card px-3 py-1 text-[11px] text-app-main hover:border-app-accent"
                     >
-                        {showNewGoal ? "Close" : "New goal"}
+                        {showNewGoal ? "Close" : "+ New Goal"}
                     </button>
                 </div>
             </header>
@@ -295,22 +318,23 @@ export function GoalsWidget() {
                 <section className="mb-6 rounded-2xl border border-app-border bg-app-card p-4 text-xs">
                     <h2 className="text-app-main font-semibold mb-2">{editingId ? "Edit goal" : "New goal"}</h2>
 
-                    <label className="text-[11px] text-app-muted">Horizon</label>
+                    <label className="text-[11px] text-app-muted">Time Horizon</label>
                     <select
                         value={newHorizon}
                         onChange={(e) => setNewHorizon(e.target.value as Horizon)}
                         className="mt-1 block w-full rounded bg-app-input border border-app-border px-2 py-1 text-app-main"
                     >
-                        <option value="3y">3 years</option>
-                        <option value="1y">1 year</option>
-                        <option value="6m">6 months</option>
-                        <option value="1m">1 month</option>
+                        <option value="1m">Weekly Focus (Urgent)</option>
+                        <option value="6m">6 Months</option>
+                        <option value="1y">1 Year</option>
+                        <option value="3y">3 Years</option>
                     </select>
 
                     <label className="mt-3 text-[11px] text-app-muted">Goal title</label>
                     <input
                         value={newTitle}
                         onChange={(e) => setNewTitle(e.target.value)}
+                        placeholder="e.g. Launch the MVP"
                         className="mt-1 block w-full rounded bg-app-input border border-app-border px-2 py-1 text-app-main"
                     />
 
@@ -340,7 +364,7 @@ export function GoalsWidget() {
                             onClick={handleSaveGoal}
                             className="flex-1 rounded-full bg-app-accent py-1.5 text-xs text-app-accent-text font-semibold"
                         >
-                            {editingId ? "Save Changes" : "Add goal"}
+                            {editingId ? "Save Changes" : "Create Goal"}
                         </button>
                         {editingId && (
                             <button
@@ -354,18 +378,33 @@ export function GoalsWidget() {
                 </section>
             )}
 
-            <section>
-                {groups["3y"].length > 0 && <h2 className="text-xs text-app-muted uppercase mb-1">3 years</h2>}
-                {groups["3y"].map(GoalCard)}
+            <section className="space-y-6">
+                {/* 1. WEEKLY / SHORT TERM (Top Priority) */}
+                <div>
+                    <h2 className="text-sm font-bold text-app-accent-color uppercase tracking-wider mb-2 border-b border-app-border pb-1">
+                        Weekly Focus
+                    </h2>
+                    {groups["1m"].length === 0 && <p className="text-xs text-app-muted italic">No active weekly goals.</p>}
+                    {groups["1m"].map(GoalCard)}
+                </div>
 
-                {groups["1y"].length > 0 && <h2 className="text-xs text-app-muted uppercase mt-5 mb-1">1 year</h2>}
-                {groups["1y"].map(GoalCard)}
+                {/* 2. 6 MONTHS */}
+                <div>
+                    <h2 className="text-xs font-semibold text-app-muted uppercase tracking-wider mb-2 mt-4">6 Months</h2>
+                    {groups["6m"].map(GoalCard)}
+                </div>
 
-                {groups["6m"].length > 0 && <h2 className="text-xs text-app-muted uppercase mt-5 mb-1">6 months</h2>}
-                {groups["6m"].map(GoalCard)}
+                {/* 3. 1 YEAR */}
+                <div>
+                    <h2 className="text-xs font-semibold text-app-muted uppercase tracking-wider mb-2 mt-4">1 Year</h2>
+                    {groups["1y"].map(GoalCard)}
+                </div>
 
-                {groups["1m"].length > 0 && <h2 className="text-xs text-app-muted uppercase mt-5 mb-1">1 month</h2>}
-                {groups["1m"].map(GoalCard)}
+                {/* 4. 3 YEARS */}
+                <div>
+                    <h2 className="text-xs font-semibold text-app-muted uppercase tracking-wider mb-2 mt-4">3 Years (Vision)</h2>
+                    {groups["3y"].map(GoalCard)}
+                </div>
             </section>
         </div>
     );
