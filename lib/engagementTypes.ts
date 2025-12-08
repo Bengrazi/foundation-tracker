@@ -17,3 +17,25 @@ export interface Celebration {
     is_used: boolean;
     created_at: string;
 }
+
+export type Horizon = "3y" | "1y" | "6m" | "1m";
+export type GoalStatus = "not_started" | "in_progress" | "achieved";
+
+export interface Goal {
+    id: string;
+    user_id: string;
+    title: string;
+    status: GoalStatus;
+    target_date: string;
+    horizon: Horizon;
+    order_index: number;
+}
+
+export interface UserProfile {
+    id: string;
+    theme: string;
+    text_size: string;
+    points: number;
+    priorities: string | null;
+    life_summary: string | null;
+}

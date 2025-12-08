@@ -7,24 +7,13 @@ import { applySavedTextSize } from "@/lib/textSize";
 import { awardPoints, POINTS } from "@/lib/points";
 import { useGlobalState } from "./GlobalStateProvider";
 
-type Horizon = "3y" | "1y" | "6m" | "1m";
-type GoalStatus = "not_started" | "in_progress" | "achieved";
-
-interface Goal {
-    id: string;
-    user_id: string;
-    title: string;
-    status: GoalStatus;
-    target_date: string;
-    horizon: Horizon;
-    order_index: number;
-}
+import { Goal, GoalStatus, Horizon } from "@/lib/engagementTypes";
 
 export function GoalsWidget() {
-    const { refreshPoints } = useGlobalState();
+    const { goals: globalGoals, refreshPoints, refreshGoals } = useGlobalState();
     const [goals, setGoals] = useState<Goal[]>([]);
     const [hideCompleted, setHideCompleted] = useState(false);
-    const [loading, setLoading] = useState(true);
+    // const [loading, setLoading] = useState(true); // Removed local loading
     const [showNewGoal, setShowNewGoal] = useState(false);
 
     // Default to "1m" (Weekly) for new goals as it's the top priority now
@@ -35,33 +24,13 @@ export function GoalsWidget() {
 
     const [editingId, setEditingId] = useState<string | null>(null);
 
+    // Sync local goals with global goals
+    useEffect(() => {
+        setGoals(globalGoals);
+    }, [globalGoals]);
+
     useEffect(() => {
         applySavedTextSize();
-    }, []);
-
-    useEffect(() => {
-        async function loadGoals() {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-            if (!user) {
-                setLoading(false);
-                return;
-            }
-
-            const { data, error } = await supabase
-                .from("goals")
-                .select("*")
-                .eq("user_id", user.id)
-                .order("order_index", { ascending: true });
-
-            if (!error && data) {
-                setGoals(data as Goal[]);
-            }
-            setLoading(false);
-        }
-
-        loadGoals();
     }, []);
 
     async function handleSaveGoal() {
@@ -95,6 +64,7 @@ export function GoalsWidget() {
                 setEditingId(null);
                 setNewTitle("");
                 setShowNewGoal(false);
+                refreshGoals(); // Refresh global
             }
         } else {
             // Create new
@@ -121,6 +91,7 @@ export function GoalsWidget() {
                 setGoals((prev) => [...prev, data as Goal]);
                 setNewTitle("");
                 setShowNewGoal(false);
+                refreshGoals(); // Refresh global
             }
         }
     }
@@ -133,6 +104,7 @@ export function GoalsWidget() {
             setEditingId(null);
             setShowNewGoal(false);
         }
+        refreshGoals();
     }
 
     function startEdit(goal: Goal) {
@@ -167,6 +139,7 @@ export function GoalsWidget() {
 
         // Persist
         await supabase.from("goals").update({ status: newStatus }).eq("id", goal.id);
+        refreshGoals();
     }
 
     async function moveGoal(goal: Goal, direction: "up" | "down") {
@@ -208,6 +181,7 @@ export function GoalsWidget() {
             supabase.from("goals").update({ order_index: newGoalOrder }).eq("id", goal.id),
             supabase.from("goals").update({ order_index: newOtherOrder }).eq("id", other.id),
         ]);
+        refreshGoals();
     }
 
     const groups: Record<Horizon, Goal[]> = { "3y": [], "1y": [], "6m": [], "1m": [] };

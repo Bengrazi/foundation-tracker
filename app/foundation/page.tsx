@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
+import { useGlobalState } from "@/components/GlobalStateProvider";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
 import { supabase } from "@/lib/supabaseClient";
 import { applySavedTextSize } from "@/lib/textSize";
@@ -226,7 +227,7 @@ export default function FoundationPage() {
     journal: false,
   });
 
-  const [dailyIntention, setDailyIntention] = useState<DailyIntention | null>(null);
+  const { dailyIntention } = useGlobalState();
   const [timeRemaining, setTimeRemaining] = useState<string>("");
   const [themeState, setThemeState] = useState<string>("cherry");
 
@@ -289,34 +290,7 @@ export default function FoundationPage() {
     triggerPrecompute();
   }, [selectedDate]);
 
-  // Fetch Daily Intention on mount only (it's always for "today")
-  useEffect(() => {
-    fetchIntention();
-  }, []);
 
-  // Fetch Daily Intention
-  async function fetchIntention(force = false) {
-    const today = format(new Date(), "yyyy-MM-dd");
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const res = await fetch(`/api/intention?date=${today}${force ? "&force=true" : ""}`, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`
-        },
-        cache: "no-store"
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setDailyIntention(data);
-      }
-    } catch (e) {
-      console.error("Failed to fetch intention", e);
-    }
-  }
 
   // Countdown timer - updates every minute
   useEffect(() => {

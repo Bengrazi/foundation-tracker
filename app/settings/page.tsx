@@ -40,6 +40,7 @@ function downloadCsv(filename: string, csv: string) {
 }
 
 import { applySavedTheme, setTheme, Theme } from "@/lib/theme";
+import { useGlobalState } from "@/components/GlobalStateProvider";
 
 // ... (imports)
 
@@ -53,6 +54,7 @@ export default function SettingsPage() {
   const [showPlans, setShowPlans] = useState(true);
   const [showJournal, setShowJournal] = useState(true);
   const [dailyAiQuestionEnabled, setDailyAiQuestionEnabled] = useState(false);
+  const { userProfile, refreshPoints, refreshGoals, refreshIntention, refreshQuestion, refreshProfile } = useGlobalState();
 
   useEffect(() => {
     applySavedTextSize();
@@ -75,30 +77,12 @@ export default function SettingsPage() {
       if (savedTheme) setThemeState(savedTheme);
     }
 
-    // Sync from DB
-    const syncSettings = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth?.user) return;
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("theme, text_size")
-        .eq("id", auth.user.id)
-        .single();
-
-      if (profile) {
-        if (profile.theme) {
-          setTheme(profile.theme as Theme);
-          setThemeState(profile.theme as Theme);
-        }
-        if (profile.text_size) {
-          setTextSize(profile.text_size as TextSize);
-          setTextSizeState(profile.text_size as TextSize);
-        }
-      }
-    };
-    syncSettings();
-  }, []);
+    // Sync from Global State
+    if (userProfile) {
+      if (userProfile.theme) setThemeState(userProfile.theme as Theme);
+      if (userProfile.text_size) setTextSizeState(userProfile.text_size as TextSize);
+    }
+  }, [userProfile]);
 
   const handleAiCoachToggle = (enabled: boolean) => {
     setAiCoachEnabled(enabled);
@@ -251,6 +235,15 @@ export default function SettingsPage() {
       });
 
       // Send them back to Foundation; onboarding modal will appear again.
+      // Update global state to reflect cleared data
+      await Promise.all([
+        refreshPoints(),
+        refreshGoals(),
+        refreshIntention(),
+        refreshQuestion(),
+        refreshProfile()
+      ]);
+
       router.push("/foundation");
     } finally {
       setResetting(false);
