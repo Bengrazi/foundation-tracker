@@ -9,24 +9,13 @@ import { applySavedTextSize } from "@/lib/textSize";
 import { applySavedTheme } from "@/lib/theme";
 import { DailyIntentionCard } from "@/components/DailyIntentionCard";
 import { CelebrationModal } from "@/components/CelebrationModal";
-import { DailyIntention } from "@/lib/engagementTypes";
+import { DailyIntention, Foundation } from "@/lib/engagementTypes";
 import { awardPoints, POINTS } from "@/lib/points";
 import { OnboardingInterest, InterestSelection } from "@/components/OnboardingInterest";
 
 // ------------- Types -------------
 
-type ScheduleType = "daily" | "weekdays" | "weekly" | "monthly" | "xPerWeek";
-
-type Foundation = {
-  id: string;
-  title: string;
-  schedule_type: ScheduleType;
-  x_per_week: number | null;
-  start_date: string; // "yyyy-MM-dd"
-  end_date: string | null; // null = still active
-  user_id: string;
-};
-
+// Re-using Foundation from engagementTypes, but logs are local for now
 type FoundationLog = {
   id: string;
   foundation_id: string;
@@ -59,7 +48,7 @@ function isWeekday(dateStr: string) {
 }
 
 function matchesSchedule(
-  schedule: ScheduleType,
+  schedule: Foundation["schedule_type"],
   dateStr: string,
   xPerWeek: number | null
 ) {
@@ -192,25 +181,40 @@ const DEFAULT_FOUNDATIONS: Omit<Foundation, "id" | "start_date" | "end_date" | "
 // ------------- Component -------------
 
 export default function FoundationPage() {
-  const [selectedDate, setSelectedDate] = useState(
-    format(new Date(), "yyyy-MM-dd")
-  );
+  // Global state
+  const {
+    foundations: globalFoundations,
+    dailyIntention,
+    refreshFoundations,
+    loading: globalLoading
+  } = useGlobalState();
 
-  const [foundations, setFoundations] = useState<Foundation[]>([]);
+  // Local state
+  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+
+  // Computed from global state
+  const foundations = useMemo(() => {
+    return globalFoundations.filter(f => {
+      if (selectedDate < f.start_date) return false;
+      if (f.end_date && selectedDate > f.end_date) return false;
+      return true;
+    });
+  }, [globalFoundations, selectedDate]);
+
   const [logsByDate, setLogsByDate] = useState<LogsByDate>({});
-  const [loading, setLoading] = useState(true);
+  const [loadingLogs, setLoadingLogs] = useState(true);
   const [points, setPoints] = useState(0);
 
   const [showNewHabitForm, setShowNewHabitForm] = useState(false);
   const [creatingHabit, setCreatingHabit] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null); // Keep specifically for modal if we use it, otherwise used by logic
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState("");
 
   const [newTitle, setNewTitle] = useState("");
-  const [newSchedule, setNewSchedule] = useState<ScheduleType>("daily");
+  const [newSchedule, setNewSchedule] = useState<Foundation["schedule_type"]>("daily");
   const [newXPerWeek, setNewXPerWeek] = useState<number>(3);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -227,7 +231,6 @@ export default function FoundationPage() {
     journal: false,
   });
 
-  const { dailyIntention } = useGlobalState();
   const [timeRemaining, setTimeRemaining] = useState<string>("");
   const [themeState, setThemeState] = useState<string>("cherry");
 
@@ -290,8 +293,6 @@ export default function FoundationPage() {
     triggerPrecompute();
   }, [selectedDate]);
 
-
-
   // Countdown timer - updates every minute
   useEffect(() => {
     const calculateTimeRemaining = () => {
@@ -317,17 +318,19 @@ export default function FoundationPage() {
     return () => clearInterval(interval);
   }, []);
 
+  // Load Logs Only (and seed if needed)
   useEffect(() => {
     let cancelled = false;
 
-    const load = async () => {
-      setLoading(true);
+    const loadLogs = async () => {
+      setLoadingLogs(true);
       const { data: auth } = await supabase.auth.getUser();
       if (!auth?.user) {
-        setLoading(false);
+        setLoadingLogs(false);
         return;
       }
 
+      // Fetch points locally (could be global, but keeping for specific update logic)
       const { data: profile } = await supabase
         .from("profiles")
         .select("points")
@@ -337,18 +340,8 @@ export default function FoundationPage() {
         setPoints(profile.points ?? 0);
       }
 
-      const { data: fdData, error: fdError } = await supabase
-        .from("foundations")
-        .select("*")
-        .lte("start_date", selectedDate)
-        .or(`end_date.is.null,end_date.gte.${selectedDate}`)
-        .order("start_date", { ascending: true });
-
-      if (fdError) console.error("Error loading foundations", fdError);
-
-      const foundationsLoaded = (fdData || []) as Foundation[];
-
-      if (!fdError && foundationsLoaded.length === 0) {
+      // Seeding Logic (if global foundations empty and finished loading)
+      if (!globalLoading && globalFoundations.length === 0) {
         const { count } = await supabase
           .from("foundations")
           .select("*", { count: "exact", head: true })
@@ -363,17 +356,17 @@ export default function FoundationPage() {
             end_date: null,
           }));
 
-          const { data: seeded, error: seedError } = await supabase
+          const { error: seedError } = await supabase
             .from("foundations")
-            .insert(inserts)
-            .select("*");
+            .insert(inserts);
 
-          if (!seedError && seeded) {
-            foundationsLoaded.push(...(seeded as Foundation[]));
+          if (!seedError) {
+            refreshFoundations(); // Trigger global refresh
           }
         }
       }
 
+      // Fetch Logs
       const from = format(addDays(parseISO(selectedDate), -60), "yyyy-MM-dd");
       const { data: logsData, error: logsError } = await supabase
         .from("foundation_logs")
@@ -385,17 +378,16 @@ export default function FoundationPage() {
       if (logsError) console.error("Error loading foundation logs", logsError);
 
       if (!cancelled) {
-        setFoundations(foundationsLoaded);
         setLogsByDate(groupLogsByDate((logsData || []) as FoundationLog[]));
-        setLoading(false);
+        setLoadingLogs(false);
       }
     };
 
-    load();
+    loadLogs();
     return () => {
       cancelled = true;
     };
-  }, [selectedDate]);
+  }, [selectedDate, globalFoundations.length, globalLoading, refreshFoundations]);
 
   const logsForSelectedDay = useMemo(
     () => logsByDate[selectedDate] || [],
@@ -428,7 +420,6 @@ export default function FoundationPage() {
       newFoundations[swapIndex],
       newFoundations[index],
     ];
-    setFoundations(newFoundations);
 
     const f1 = newFoundations[index];
     const f2 = newFoundations[swapIndex];
@@ -437,6 +428,8 @@ export default function FoundationPage() {
       { id: f1.id, order_index: index, title: f1.title, user_id: f1.user_id },
       { id: f2.id, order_index: swapIndex, title: f2.title, user_id: f2.user_id },
     ]);
+
+    await refreshFoundations();
   };
 
   const checkCelebration = async (
@@ -460,9 +453,6 @@ export default function FoundationPage() {
     const goldCount = parseInt(localStorage.getItem(goldKey) || "0", 10);
     const stdCount = parseInt(localStorage.getItem(stdKey) || "0", 10);
 
-    console.log(`[Celebration Check] Date: ${selectedDate}, Gold: ${goldStreak}, Habit: ${newStreak}, AllDone: ${allDone}`);
-    console.log(`[Celebration Limits] Gold shown on ${selectedDate}: ${goldCount}, Habit shown on ${selectedDate}: ${stdCount}`);
-
     let trigger = "";
     let count = 0;
     let isFirstGold = false;
@@ -481,15 +471,12 @@ export default function FoundationPage() {
     }
 
     // 2. Check Habit Streak
-    // Only show habit streak if NO gold streak today AND no other habit streak today
     if (!trigger && habitMilestones.includes(newStreak) && stdCount < 1 && goldCount < 1) {
       trigger = "habit_streak";
       count = newStreak;
     }
 
     if (trigger) {
-      console.log(`[Celebration Triggered] Type: ${trigger}, Count: ${count}, Date: ${selectedDate}`);
-
       // Update limits
       if (trigger === "gold_streak") {
         localStorage.setItem(goldKey, String(goldCount + 1));
@@ -531,8 +518,6 @@ export default function FoundationPage() {
 
           setCelebrationMessage(msg);
           setShowCelebration(true);
-        } else {
-          console.error("[Celebration Error] API returned:", res.status);
         }
       } catch (e) {
         console.error("Failed to fetch celebration", e);
@@ -540,12 +525,10 @@ export default function FoundationPage() {
     }
 
     // 3. Trigger Precompute (Event-Driven)
-    // We do this if allDone is true OR if we just completed a habit
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        // Calculate all habit streaks for precompute context
-        const habitStreaks = foundations.map(f => ({
+        const habitStreaks = globalFoundations.map(f => ({
           id: f.id,
           title: f.title,
           streak: f.id === foundationId ? newStreak : (streakByFoundationId[f.id] || 0)
@@ -628,23 +611,14 @@ export default function FoundationPage() {
         selectedDate
       );
 
-      const triggerCelebration = (msg: string) => {
-        setCelebrationMessage(msg);
-        setShowCelebration(true);
-      };
-
       // Award Points
       const { data: auth } = await supabase.auth.getUser();
       if (auth?.user) {
-        // Base completion points
         const { points: earned } = await awardPoints(auth.user.id, POINTS.HABIT_COMPLETION, "habit_completion", foundation.id);
         if (earned > 0) {
           setPoints((prev) => prev + earned);
-          // Only trigger celebration for streaks, not just points
-          // triggerCelebration(`+${earned} Cherry!`); 
         }
 
-        // Streak bonuses
         if (newStreak === 7) {
           const { points: bonus } = await awardPoints(auth.user.id, POINTS.STREAK_BONUS_7, "streak_bonus_7", foundation.id);
           if (bonus > 0) setPoints((prev) => prev + bonus);
@@ -655,7 +629,7 @@ export default function FoundationPage() {
         }
       }
     } else {
-      // Deduct points if unchecked
+      // Deduct points
       const { data: auth } = await supabase.auth.getUser();
       if (auth?.user) {
         const deduction = -POINTS.HABIT_COMPLETION;
@@ -779,15 +753,18 @@ export default function FoundationPage() {
     if (editingId) {
       // EDIT MODE
       const foundation = foundations.find(f => f.id === editingId);
-      if (!foundation) return;
+      if (!foundation) {
+        setCreatingHabit(false);
+        return;
+      }
 
-      // Check for past logs
+      // Check for logs before today
       const yesterday = format(addDays(parseISO(selectedDate), -1), "yyyy-MM-dd");
       const { count } = await supabase
         .from("foundation_logs")
         .select("*", { count: "exact", head: true })
         .eq("foundation_id", editingId)
-        .lte("date", yesterday); // Logs before today
+        .lte("date", yesterday);
 
       const hasPastLogs = (count || 0) > 0;
 
@@ -806,73 +783,46 @@ export default function FoundationPage() {
         }
 
         // Create new
-        const { data: newF, error: createError } = await supabase
+        await supabase
           .from("foundations")
           .insert({
             user_id: auth.user.id,
             title: newTitle.trim(),
             schedule_type: newSchedule,
             x_per_week: newSchedule === "xPerWeek" ? newXPerWeek : null,
-            start_date: selectedDate, // Starts today
+            start_date: selectedDate,
             end_date: null,
-          })
-          .select("*")
-          .single();
+          });
 
-        if (createError) {
-          console.error("Error creating new version", createError);
-        } else if (newF) {
-          setFoundations(prev => [
-            ...prev.filter(f => f.id !== editingId), // Remove old (it ended yesterday)
-            newF as Foundation
-          ]);
-        }
       } else {
-        // No past logs, just update in place
-        const { data: updatedF, error: updateError } = await supabase
+        // No past logs, just update
+        await supabase
           .from("foundations")
           .update({
             title: newTitle.trim(),
             schedule_type: newSchedule,
             x_per_week: newSchedule === "xPerWeek" ? newXPerWeek : null,
           })
-          .eq("id", editingId)
-          .select("*")
-          .single();
-
-        if (updateError) {
-          console.error("Error updating foundation", updateError);
-        } else if (updatedF) {
-          setFoundations(prev => prev.map(f => f.id === editingId ? (updatedF as Foundation) : f));
-        }
+          .eq("id", editingId);
       }
 
-      setEditingId(null);
     } else {
       // CREATE MODE
-      const insert = {
-        user_id: auth.user.id,
-        title: newTitle.trim(),
-        schedule_type: newSchedule,
-        x_per_week: newSchedule === "xPerWeek" ? newXPerWeek : null,
-        start_date: selectedDate,
-        end_date: null,
-      };
-
-      const { data, error } = await supabase
+      await supabase
         .from("foundations")
-        .insert(insert)
-        .select("*")
-        .single();
-
-      if (error) {
-        console.error("Error creating foundation", error);
-        alert(`Error creating habit: ${error.message}`);
-      } else if (data) {
-        setFoundations((prev) => [...prev, data as Foundation]);
-      }
+        .insert({
+          user_id: auth.user.id,
+          title: newTitle.trim(),
+          schedule_type: newSchedule,
+          x_per_week: newSchedule === "xPerWeek" ? newXPerWeek : null,
+          start_date: selectedDate,
+          end_date: null,
+        });
     }
 
+    await refreshFoundations();
+
+    setEditingId(null);
     setCreatingHabit(false);
     setNewTitle("");
     setNewSchedule("daily");
@@ -880,22 +830,15 @@ export default function FoundationPage() {
     setShowNewHabitForm(false);
   };
 
-  const handleDeleteFoundationFromTodayForward = async (
-    foundation: Foundation
-  ) => {
-    if (!confirm("Are you sure you want to remove this habit?")) return;
+  const handleDeleteFoundationFromTodayForward = async (foundation: Foundation) => {
+    if (!confirm("Are you sure you want to remove this habit from today forward?")) return;
 
-    setDeletingId(foundation.id);
-    const prevDay = dateKey(addDays(parseISO(selectedDate), -1));
+    const prevDay = format(addDays(parseISO(selectedDate), -1), 'yyyy-MM-dd');
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("foundations")
       .update({ end_date: prevDay })
-      .eq("id", foundation.id)
-      .select("*")
-      .single();
-
-    setDeletingId(null);
+      .eq("id", foundation.id);
 
     if (error) {
       console.error("Error ending foundation", error);
@@ -903,13 +846,9 @@ export default function FoundationPage() {
       return;
     }
 
-    const updated = data as Foundation;
-
-    setFoundations((prev) =>
-      prev
-        .map((f) => (f.id === updated.id ? updated : f))
-        .filter((f) => !f.end_date || f.end_date >= selectedDate)
-    );
+    await refreshFoundations();
+    setShowNewHabitForm(false);
+    setEditingId(null);
   };
 
   const handleOnboardingChange = (field: keyof OnboardingState, value: string) =>
@@ -987,6 +926,8 @@ export default function FoundationPage() {
         }
       }
 
+      await refreshFoundations();
+
       if (typeof window !== "undefined") {
         window.localStorage.setItem(ONBOARDING_KEY, "1");
         window.location.reload();
@@ -1005,36 +946,14 @@ export default function FoundationPage() {
     logsForSelectedDay.some((l) => l.foundation_id === f.id && l.completed)
   ).length;
 
-  if (loading) {
+  if (globalLoading) {
+    // Show full loading state only on initial global load
     return (
       <div className="min-h-screen bg-app-main text-app-main pb-20 transition-colors duration-300">
         <AuthGuardHeader />
         <main className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-24 pt-2">
-          {/* Skeleton date header */}
-          <section className="mt-2 flex items-center justify-between">
-            <div>
-              <div className="h-3 w-12 bg-app-card animate-pulse rounded mb-2" />
-              <div className="h-6 w-36 bg-app-card animate-pulse rounded" />
-            </div>
-            <div className="h-8 w-28 bg-app-card animate-pulse rounded-full" />
-          </section>
-
-          {/* Skeleton intention card */}
-          <div className="rounded-2xl border border-app-border bg-app-card p-4">
-            <div className="h-4 w-24 bg-app-card-hover animate-pulse rounded mb-3" />
-            <div className="h-12 bg-app-card-hover animate-pulse rounded" />
-          </div>
-
-          {/* Skeleton habits */}
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-2xl border border-app-border bg-app-card p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 bg-app-card-hover animate-pulse rounded-full" />
-                  <div className="h-4 w-32 bg-app-card-hover animate-pulse rounded" />
-                </div>
-              </div>
-            ))}
+          <div className="py-6 text-center text-xs text-app-muted">
+            Loading your foundations…
           </div>
         </main>
       </div>
@@ -1046,8 +965,6 @@ export default function FoundationPage() {
       <AuthGuardHeader />
 
       <main className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-24 pt-2">
-        {/* Daily Intention */}
-
 
         {/* Date header */}
         <section className="mt-2 flex items-center justify-between">
@@ -1118,7 +1035,7 @@ export default function FoundationPage() {
               />
               <div className="flex items-center justify-between gap-2 text-[11px] text-app-muted">
                 <div className="flex flex-wrap gap-1">
-                  {(["daily", "weekdays", "weekly", "monthly", "xPerWeek"] as ScheduleType[]).map(
+                  {(["daily", "weekdays", "weekly", "monthly", "xPerWeek"] as Foundation["schedule_type"][]).map(
                     (opt) => (
                       <button
                         key={opt}
@@ -1176,118 +1093,116 @@ export default function FoundationPage() {
             </div>
           )}
 
-          {loading && (
-            <div className="py-6 text-center text-xs text-app-muted">
-              Loading your foundations…
-            </div>
-          )}
+          {/* Skeleton for logs only? Or just render what we have. 
+              We have globalFoundations instantly. 
+              Logs load async. Checkboxes will be empty initially then fill in. 
+              This prevents "freeze". */}
 
-          {!loading &&
-            foundations.map((f) => {
-              const logs = logsForSelectedDay;
-              const log = logs.find((l) => l.foundation_id === f.id);
-              const completed = log?.completed ?? false;
-              const streak = streakByFoundationId[f.id] ?? 0;
+          {foundations.map((f) => {
+            const logs = logsForSelectedDay;
+            const log = logs.find((l) => l.foundation_id === f.id);
+            const completed = log?.completed ?? false;
+            const streak = streakByFoundationId[f.id] ?? 0;
 
-              const activeToday = foundations.filter((found) => {
-                if (selectedDate < found.start_date) return false;
-                if (found.end_date && selectedDate > found.end_date) return false;
-                return matchesSchedule(found.schedule_type, selectedDate, found.x_per_week);
-              });
-              const allDone = activeToday.length > 0 && activeToday.every((found) =>
-                logs.some((l) => l.foundation_id === found.id && l.completed)
-              );
+            const activeToday = foundations.filter((found) => {
+              if (selectedDate < found.start_date) return false;
+              if (found.end_date && selectedDate > found.end_date) return false;
+              return matchesSchedule(found.schedule_type, selectedDate, found.x_per_week);
+            });
+            const allDone = activeToday.length > 0 && activeToday.every((found) =>
+              logs.some((l) => l.foundation_id === found.id && l.completed)
+            );
 
-              let ringClass = "ring-1 ring-app-border";
-              if (allDone) ringClass = "gold-racetrack shadow-[0_0_15px_rgba(234,179,8,0.6)] border-yellow-500";
-              else if (completed) ringClass = "ring-1 ring-green-500";
+            let ringClass = "ring-1 ring-app-border";
+            if (allDone) ringClass = "gold-racetrack shadow-[0_0_15px_rgba(234,179,8,0.6)] border-yellow-500";
+            else if (completed) ringClass = "ring-1 ring-green-500";
 
-              return (
-                <div
-                  key={f.id}
-                  className={`mb-3 rounded-2xl bg-app-card p-3 transition-all duration-300 ${ringClass}`}
-                >
-                  {/* Row 1: Checkbox + Title */}
-                  <div className="flex items-center gap-3 mb-2">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleFoundation(f)}
-                      className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border transition-colors ${completed
-                        ? allDone
-                          ? "border-yellow-500 bg-yellow-500 text-app-main shadow-[0_0_10px_rgba(234,179,8,0.6)]"
-                          : "border-app-accent bg-app-accent text-app-accent-text"
-                        : "border-app-border bg-app-input text-app-muted"
-                        }`}
-                    >
-                      {completed ? "✓" : ""}
-                    </button>
-                    <div className="text-sm font-semibold text-app-main">
-                      {f.title}
-                    </div>
-                  </div>
-
-                  {/* Row 2: Meta | Streak | Arrows | Remove */}
-                  <div className="flex items-center justify-between pl-9 mb-2">
-                    <div className="flex items-center gap-2 text-[11px] text-app-muted">
-                      <span>
-                        {f.schedule_type === "daily"
-                          ? "Daily"
-                          : f.schedule_type === "weekdays"
-                            ? "Weekdays"
-                            : f.schedule_type === "weekly"
-                              ? "Weekly"
-                              : f.schedule_type === "monthly"
-                                ? "Monthly"
-                                : `${f.x_per_week}x per week`}
-                      </span>
-                      {streak > 0 && (
-                        <span className="text-app-accent-color">
-                          • Streak: {streak}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1 mr-2">
-                        <button
-                          onClick={() => handleMoveFoundation(f.id, "up")}
-                          className="text-[10px] text-app-muted hover:text-app-accent-color px-1"
-                        >
-                          ▲
-                        </button>
-                        <button
-                          onClick={() => handleMoveFoundation(f.id, "down")}
-                          className="text-[10px] text-app-muted hover:text-app-accent-color px-1"
-                        >
-                          ▼
-                        </button>
-                      </div>
-
-                      <div className="relative flex items-center gap-2">
-                        <button
-                          onClick={() => handleEditFoundation(f)}
-                          className="text-[10px] text-app-muted hover:text-app-accent-color px-1"
-                        >
-                          Edit
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Row 3: Notes */}
-                  <div className="pl-9">
-                    <textarea
-                      value={log?.notes ?? ""}
-                      onChange={(e) => handleNotesChange(f, e.target.value)}
-                      placeholder="Notes..."
-                      className="w-full resize-none rounded bg-app-card-hover/30 px-2 py-1 text-xs text-app-muted placeholder-app-muted/50 outline-none focus:bg-app-card-hover/50 border border-transparent focus:border-app-border/30"
-                      rows={1}
-                      style={{ minHeight: "1.5em" }}
-                    />
+            return (
+              <div
+                key={f.id}
+                className={`mb-3 rounded-2xl bg-app-card p-3 transition-all duration-300 ${ringClass}`}
+              >
+                {/* Row 1: Checkbox + Title */}
+                <div className="flex items-center gap-3 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleFoundation(f)}
+                    className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border transition-colors ${completed
+                      ? allDone
+                        ? "border-yellow-500 bg-yellow-500 text-app-main shadow-[0_0_10px_rgba(234,179,8,0.6)]"
+                        : "border-app-accent bg-app-accent text-app-accent-text"
+                      : "border-app-border bg-app-input text-app-muted"
+                      }`}
+                  >
+                    {completed ? "✓" : ""}
+                  </button>
+                  <div className="text-sm font-semibold text-app-main">
+                    {f.title}
                   </div>
                 </div>
-              );
-            })}
+
+                {/* Row 2: Meta | Streak | Arrows | Remove */}
+                <div className="flex items-center justify-between pl-9 mb-2">
+                  <div className="flex items-center gap-2 text-[11px] text-app-muted">
+                    <span>
+                      {f.schedule_type === "daily"
+                        ? "Daily"
+                        : f.schedule_type === "weekdays"
+                          ? "Weekdays"
+                          : f.schedule_type === "weekly"
+                            ? "Weekly"
+                            : f.schedule_type === "monthly"
+                              ? "Monthly"
+                              : `${f.x_per_week}x per week`}
+                    </span>
+                    {streak > 0 && (
+                      <span className="text-app-accent-color">
+                        • Streak: {streak}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 mr-2">
+                      <button
+                        onClick={() => handleMoveFoundation(f.id, "up")}
+                        className="text-[10px] text-app-muted hover:text-app-accent-color px-1"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        onClick={() => handleMoveFoundation(f.id, "down")}
+                        className="text-[10px] text-app-muted hover:text-app-accent-color px-1"
+                      >
+                        ▼
+                      </button>
+                    </div>
+
+                    <div className="relative flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditFoundation(f)}
+                        className="text-[10px] text-app-muted hover:text-app-accent-color px-1"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 3: Notes */}
+                <div className="pl-9">
+                  <textarea
+                    value={log?.notes ?? ""}
+                    onChange={(e) => handleNotesChange(f, e.target.value)}
+                    placeholder="Notes..."
+                    className="w-full resize-none rounded bg-app-card-hover/30 px-2 py-1 text-xs text-app-muted placeholder-app-muted/50 outline-none focus:bg-app-card-hover/50 border border-transparent focus:border-app-border/30"
+                    rows={1}
+                    style={{ minHeight: "1.5em" }}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </section>
 
         {/* Cherry Points Tracker */}

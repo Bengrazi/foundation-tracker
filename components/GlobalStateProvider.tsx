@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
-import { DailyIntention, Goal, UserProfile } from "@/lib/engagementTypes";
+import { DailyIntention, Goal, UserProfile, Foundation } from "@/lib/engagementTypes";
 
 interface GlobalState {
     points: number;
@@ -11,11 +11,13 @@ interface GlobalState {
     dailyQuestion: string | null;
     goals: Goal[];
     userProfile: UserProfile | null;
+    foundations: Foundation[];
     refreshPoints: () => Promise<void>;
     refreshQuestion: () => Promise<void>;
     refreshIntention: () => Promise<void>;
     refreshGoals: () => Promise<void>;
     refreshProfile: () => Promise<void>;
+    refreshFoundations: () => Promise<void>;
     loading: boolean;
 }
 
@@ -25,11 +27,13 @@ const GlobalContext = createContext<GlobalState>({
     dailyQuestion: null,
     goals: [],
     userProfile: null,
+    foundations: [],
     refreshPoints: async () => { },
     refreshQuestion: async () => { },
     refreshIntention: async () => { },
     refreshGoals: async () => { },
     refreshProfile: async () => { },
+    refreshFoundations: async () => { },
     loading: true,
 });
 
@@ -43,6 +47,7 @@ export function GlobalStateProvider({ children }: { children: ReactNode }) {
     const [dailyQuestion, setDailyQuestion] = useState<string | null>(null);
     const [goals, setGoals] = useState<Goal[]>([]);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    const [foundations, setFoundations] = useState<Foundation[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Initial load
@@ -54,7 +59,8 @@ export function GlobalStateProvider({ children }: { children: ReactNode }) {
                 refreshIntention(),
                 refreshQuestion(),
                 refreshGoals(),
-                refreshProfile()
+                refreshProfile(),
+                refreshFoundations()
             ]);
             setLoading(false);
         }
@@ -80,7 +86,9 @@ export function GlobalStateProvider({ children }: { children: ReactNode }) {
         if (!session) return;
 
         try {
-            const res = await fetch(`/api/intention?date=${today}`, {
+            // Use our new persistent API with explicit date to match intention logic
+            const today = format(new Date(), "yyyy-MM-dd");
+            const res = await fetch(`/api/daily-question?date=${today}`, {
                 headers: { Authorization: `Bearer ${session.access_token}` },
             });
             if (res.ok) {
@@ -97,8 +105,9 @@ export function GlobalStateProvider({ children }: { children: ReactNode }) {
         if (!session) return;
 
         try {
-            // Use our new persistent API
-            const res = await fetch("/api/daily-question", {
+            // Use our new persistent API with explicit date to match intention logic
+            const today = format(new Date(), "yyyy-MM-dd");
+            const res = await fetch(`/api/daily-question?date=${today}`, {
                 headers: { Authorization: `Bearer ${session.access_token}` },
             });
             if (res.ok) {
@@ -140,6 +149,20 @@ export function GlobalStateProvider({ children }: { children: ReactNode }) {
         }
     }
 
+    async function refreshFoundations() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+            .from("foundations")
+            .select("*")
+            .order("order_index", { ascending: true }); // Prefer explicit ordering if column exists, else start_date
+
+        if (!error && data) {
+            setFoundations(data as Foundation[]);
+        }
+    }
+
     return (
         <GlobalContext.Provider
             value={{
@@ -148,11 +171,13 @@ export function GlobalStateProvider({ children }: { children: ReactNode }) {
                 dailyQuestion,
                 goals,
                 userProfile,
+                foundations,
                 refreshPoints,
                 refreshQuestion,
                 refreshIntention,
                 refreshGoals,
                 refreshProfile,
+                refreshFoundations,
                 loading,
             }}
         >

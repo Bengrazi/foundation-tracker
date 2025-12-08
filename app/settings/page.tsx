@@ -50,10 +50,40 @@ export default function SettingsPage() {
   const [resetting, setResetting] = useState(false);
   const [textSize, setTextSizeState] = useState<TextSize>("small");
   const [theme, setThemeState] = useState<Theme>("dark");
-  const [aiCoachEnabled, setAiCoachEnabled] = useState(true);
-  const [showPlans, setShowPlans] = useState(true);
-  const [showJournal, setShowJournal] = useState(true);
-  const [dailyAiQuestionEnabled, setDailyAiQuestionEnabled] = useState(false);
+
+  // Initialize from localStorage to prevent flash
+  const [aiCoachEnabled, setAiCoachEnabled] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("foundation_ai_coach_enabled");
+      return saved !== null ? saved === "true" : true;
+    }
+    return true;
+  });
+
+  const [showPlans, setShowPlans] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("foundation_show_plans");
+      return saved !== null ? saved !== "false" : true;
+    }
+    return true;
+  });
+
+  const [showJournal, setShowJournal] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("foundation_show_journal");
+      return saved !== null ? saved !== "false" : true;
+    }
+    return true;
+  });
+
+  const [dailyAiQuestionEnabled, setDailyAiQuestionEnabled] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("foundation_daily_ai_question_enabled");
+      return saved === "true";
+    }
+    return false;
+  });
+
   const { userProfile, refreshPoints, refreshGoals, refreshIntention, refreshQuestion, refreshProfile } = useGlobalState();
 
   useEffect(() => {
@@ -61,15 +91,6 @@ export default function SettingsPage() {
     applySavedTheme();
 
     if (typeof window !== "undefined") {
-      const savedCoach = localStorage.getItem("foundation_ai_coach_enabled");
-      if (savedCoach !== null) {
-        setAiCoachEnabled(savedCoach === "true");
-      }
-
-      setShowPlans(localStorage.getItem("foundation_show_plans") !== "false");
-      setShowJournal(localStorage.getItem("foundation_show_journal") !== "false");
-      setDailyAiQuestionEnabled(localStorage.getItem("foundation_daily_ai_question_enabled") === "true");
-
       const savedTextSize = localStorage.getItem("foundation_ui_text_size_v1") as TextSize | null;
       if (savedTextSize) setTextSizeState(savedTextSize);
 

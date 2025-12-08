@@ -31,6 +31,16 @@ export interface Goal {
     order_index: number;
 }
 
+export interface Foundation {
+    id: string;
+    title: string;
+    schedule_type: "daily" | "weekdays" | "weekly" | "monthly" | "xPerWeek";
+    x_per_week: number | null;
+    start_date: string;
+    end_date: string | null;
+    user_id: string;
+}
+
 export interface UserProfile {
     id: string;
     theme: string;
