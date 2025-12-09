@@ -88,7 +88,7 @@ export function GlobalStateProvider({ children }: { children: ReactNode }) {
         try {
             // Use our new persistent API with explicit date to match intention logic
             const today = format(new Date(), "yyyy-MM-dd");
-            const res = await fetch(`/api/daily-question?date=${today}`, {
+            const res = await fetch(`/api/intention?date=${today}`, {
                 headers: { Authorization: `Bearer ${session.access_token}` },
             });
             if (res.ok) {
