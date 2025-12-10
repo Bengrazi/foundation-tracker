@@ -21,7 +21,7 @@ interface Reflection {
 }
 
 export default function ReflectPage() {
-  const { refreshPoints } = useGlobalState();
+  const { refreshPoints, dailyQuestion: globalDailyQuestion } = useGlobalState();
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), "yyyy-MM-dd")
   );
@@ -45,6 +45,42 @@ export default function ReflectPage() {
       setShowAIQuestion(localStorage.getItem("foundation_daily_ai_question_enabled") === "true");
     }
   }, []);
+
+  // Date-Specific Daily Question
+  const [dailyQuestion, setDailyQuestion] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadQuestion() {
+      const today = format(new Date(), "yyyy-MM-dd");
+
+      // If selected date is today, use global context to save a fetch (if available)
+      if (selectedDate === today && globalDailyQuestion) {
+        setDailyQuestion(globalDailyQuestion);
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      try {
+        const res = await fetch(`/api/daily-question?date=${selectedDate}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setDailyQuestion(data.question);
+        } else {
+          if (!cancelled) setDailyQuestion(null);
+        }
+      } catch (e) {
+        console.error("Failed to fetch daily question", e);
+        if (!cancelled) setDailyQuestion(null);
+      }
+    }
+    loadQuestion();
+    return () => { cancelled = true; };
+  }, [selectedDate, globalDailyQuestion]);
 
   useEffect(() => {
     loadReflection(selectedDate);
@@ -239,7 +275,7 @@ export default function ReflectPage() {
 
         {showAIQuestion && (
           <section className="mb-4 rounded-2xl border border-app-border bg-app-card p-4">
-            <DailyAIQuestion />
+            <DailyAIQuestion question={dailyQuestion} />
             <textarea
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}

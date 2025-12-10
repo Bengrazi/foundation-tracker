@@ -201,6 +201,49 @@ export default function FoundationPage() {
     });
   }, [globalFoundations, selectedDate]);
 
+  // Date-Specific State
+  const [currentIntention, setCurrentIntention] = useState<DailyIntention | null>(null);
+  const [loadingIntention, setLoadingIntention] = useState(false);
+
+  // Fetch Intention for Selected Date
+  useEffect(() => {
+    let cancelled = false;
+    const loadIntention = async () => {
+      // If selected date is today, use global context to save a fetch (if available)
+      const today = format(new Date(), "yyyy-MM-dd");
+      if (selectedDate === today && dailyIntention) {
+        setCurrentIntention(dailyIntention);
+        return;
+      }
+
+      setLoadingIntention(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setLoadingIntention(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/intention?date=${selectedDate}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setCurrentIntention(data);
+        } else {
+          if (!cancelled) setCurrentIntention(null);
+        }
+      } catch (e) {
+        console.error("Failed to fetch intention", e);
+        if (!cancelled) setCurrentIntention(null);
+      } finally {
+        if (!cancelled) setLoadingIntention(false);
+      }
+    };
+    loadIntention();
+    return () => { cancelled = true; };
+  }, [selectedDate, dailyIntention]);
+
   const [logsByDate, setLogsByDate] = useState<LogsByDate>({});
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [points, setPoints] = useState(0);
@@ -992,7 +1035,7 @@ export default function FoundationPage() {
 
         {/* Daily Intention */}
         <DailyIntentionCard
-          intention={dailyIntention || DEFAULT_INTENTION}
+          intention={currentIntention || DEFAULT_INTENTION}
           timeRemaining={timeRemaining}
         />
 

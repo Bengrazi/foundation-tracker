@@ -50,22 +50,39 @@ export function GlobalStateProvider({ children }: { children: ReactNode }) {
     const [foundations, setFoundations] = useState<Foundation[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Initial load
+    // Initial load & Midnight Refresh
+    const [lastLoadedDate, setLastLoadedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+
+    async function refreshAll() {
+        setLoading(true);
+        await Promise.all([
+            refreshPoints(),
+            refreshIntention(),
+            refreshQuestion(),
+            refreshGoals(),
+            refreshProfile(),
+            refreshFoundations()
+        ]);
+        setLoading(false);
+    }
+
     useEffect(() => {
-        async function loadAll() {
-            setLoading(true);
-            await Promise.all([
-                refreshPoints(),
-                refreshIntention(),
-                refreshQuestion(),
-                refreshGoals(),
-                refreshProfile(),
-                refreshFoundations()
-            ]);
-            setLoading(false);
-        }
-        loadAll();
+        refreshAll();
     }, []);
+
+    // Midnight Check (every minute)
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const currentDate = format(new Date(), "yyyy-MM-dd");
+            if (currentDate !== lastLoadedDate) {
+                console.log("Midnight detected! Refreshing global state...");
+                setLastLoadedDate(currentDate);
+                refreshAll();
+            }
+        }, 60000);
+
+        return () => clearInterval(interval);
+    }, [lastLoadedDate]);
 
     async function refreshPoints() {
         const { data: { user } } = await supabase.auth.getUser();
