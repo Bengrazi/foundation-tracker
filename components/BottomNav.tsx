@@ -6,6 +6,7 @@ import { useState } from "react";
 
 const allTabs = [
   { label: "Foundation", href: "/foundation" },
+  { label: "Reflect", href: "/reflect" },
   { label: "Stats", href: "/stats" },
   { label: "Settings", href: "/settings" },
 ];

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { format, parseISO, isSameDay } from "date-fns";
+import { format, parseISO, isSameDay, subDays } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useGlobalState } from "@/components/GlobalStateProvider";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
@@ -31,17 +31,54 @@ function matchesSpecificDays(days: string[] | null | undefined, dateStr: string)
   return days.includes(dayName);
 }
 
+// Calculate streak based on logs and foundation schedule
+function calculateStreak(foundationId: string, logs: FoundationLog[], endDateStr: string): number {
+  const relevantLogs = logs
+    .filter(l => l.foundation_id === foundationId && l.completed)
+    .sort((a, b) => b.date.localeCompare(a.date)); // Descending
+
+  let streak = 0;
+  let checkDate = parseISO(endDateStr);
+
+  // Check up to 100 days back
+  for (let i = 0; i < 100; i++) {
+    const dateStr = format(checkDate, "yyyy-MM-dd");
+
+    // Find if completed on this date
+    const isDone = relevantLogs.some(l => l.date === dateStr);
+
+    // If done, increment. 
+    if (isDone) {
+      streak++;
+    } else {
+      // If NOT done, checking if it was today.
+      // If today is not done yet, streak isn't broken, just doesn't include today.
+      // UNLESS we are checking a past chain.
+      if (dateStr === endDateStr) {
+        // Today not done, continue to yesterday
+      } else {
+        // Break streak if miss
+        break;
+      }
+    }
+    checkDate = subDays(checkDate, 1);
+  }
+  return streak;
+}
+
 export default function FoundationPage() {
   const router = useRouter();
   const {
     foundations: globalFoundations,
     dailyIntention,
     refreshFoundations,
-    refreshPoints
+    refreshPoints,
+    userProfile
   } = useGlobalState();
 
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [logs, setLogs] = useState<FoundationLog[]>([]);
+  const [todaysLogs, setTodaysLogs] = useState<FoundationLog[]>([]);
+  const [historyLogs, setHistoryLogs] = useState<FoundationLog[]>([]); // For streak calc
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState("");
@@ -68,6 +105,16 @@ export default function FoundationPage() {
     }).sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
   }, [globalFoundations, selectedDate]);
 
+  // -- Grid Columns Logic --
+  const gridClass = useMemo(() => {
+    // Check user profile text size
+    const size = userProfile?.text_size || "small";
+    if (size === "large" || size === "xl") {
+      return "grid-cols-2";
+    }
+    return "grid-cols-3";
+  }, [userProfile]);
+
   // -- Logs & Streak --
   useEffect(() => {
     let cancelled = false;
@@ -76,15 +123,22 @@ export default function FoundationPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Logs
-      const { data: logsData } = await supabase
+      // 1. Logs for Today (Fast)
+      const { data: todayData } = await supabase
         .from("foundation_logs")
         .select("*")
         .eq("date", selectedDate)
         .eq("completed", true);
 
-      // 2. Streak (Best effort fetch - look for latest celebration)
-      // Ideally we store this on profile, but for now we query the latest "gold_streak" celebration
+      // 2. Logs for History (last 90 days) for streaks
+      const startHistoryParams = format(subDays(new Date(), 90), "yyyy-MM-dd");
+      const { data: histData } = await supabase
+        .from("foundation_logs")
+        .select("*")
+        .gte("date", startHistoryParams)
+        .eq("completed", true);
+
+      // 3. Best Gold Streak
       const { data: streakData } = await supabase
         .from("celebrations")
         .select("streak_days")
@@ -94,7 +148,8 @@ export default function FoundationPage() {
         .single();
 
       if (!cancelled) {
-        if (logsData) setLogs(logsData as FoundationLog[]);
+        if (todayData) setTodaysLogs(todayData as FoundationLog[]);
+        if (histData) setHistoryLogs(histData as FoundationLog[]);
         if (streakData) setCurrentGoldStreak(streakData.streak_days);
         setLoadingLogs(false);
       }
@@ -109,15 +164,15 @@ export default function FoundationPage() {
 
     return todaysFoundations.every(f => {
       const required = f.times_per_day || 1;
-      const count = logs.filter(l => l.foundation_id === f.id).length;
+      const count = todaysLogs.filter(l => l.foundation_id === f.id).length;
       return count >= required;
     });
-  }, [todaysFoundations, logs]);
+  }, [todaysFoundations, todaysLogs]);
 
   const handleBubbleToggle = async (foundation: Foundation, index: number) => {
     if (isEditing) return;
 
-    const currentLogs = logs.filter(l => l.foundation_id === foundation.id);
+    const currentLogs = todaysLogs.filter(l => l.foundation_id === foundation.id);
     const completionCount = currentLogs.length;
 
     const isCompleted = completionCount > index;
@@ -128,7 +183,9 @@ export default function FoundationPage() {
       // Remove
       const logToRemove = currentLogs[0];
       if (!logToRemove) return;
-      setLogs(prev => prev.filter(l => l.id !== logToRemove.id));
+      setTodaysLogs(prev => prev.filter(l => l.id !== logToRemove.id));
+      // Also update history logs for streak consistency on live toggle
+      setHistoryLogs(prev => prev.filter(l => l.id !== logToRemove.id));
       await supabase.from("foundation_logs").delete().eq("id", logToRemove.id);
     } else {
       // Add
@@ -140,7 +197,8 @@ export default function FoundationPage() {
         completed: true
       };
 
-      setLogs(prev => [...prev, newLog]);
+      setTodaysLogs(prev => [...prev, newLog]);
+      setHistoryLogs(prev => [...prev, newLog]);
 
       const { data } = await supabase.from("foundation_logs").insert({
         foundation_id: foundation.id,
@@ -149,12 +207,15 @@ export default function FoundationPage() {
       }).select().single();
 
       if (data) {
-        setLogs(prev => prev.map(l => l.id === tempId ? (data as FoundationLog) : l));
+        const realLog = data as FoundationLog;
+        setTodaysLogs(prev => prev.map(l => l.id === tempId ? realLog : l));
+        setHistoryLogs(prev => prev.map(l => l.id === tempId ? realLog : l));
+
         await awardPoints(user.id, POINTS.HABIT_COMPLETION, "habit_completion", foundation.id);
         await refreshPoints();
 
         // Check Gold Streak (Live)
-        const updatedLogs = [...logs, newLog];
+        const updatedLogs = [...todaysLogs, newLog];
         const allDone = todaysFoundations.every(f => {
           const req = f.times_per_day || 1;
           const cnt = updatedLogs.filter(l => l.foundation_id === f.id).length;
@@ -174,14 +235,19 @@ export default function FoundationPage() {
 
   const bubbles = useMemo(() => {
     const list: any[] = [];
+    const today = format(new Date(), "yyyy-MM-dd");
+
     todaysFoundations.forEach(f => {
       const times = f.times_per_day || 1;
+      // Calculate streak
+      const streak = calculateStreak(f.id, historyLogs, today);
+
       for (let i = 0; i < times; i++) {
-        list.push({ foundation: f, index: i });
+        list.push({ foundation: f, index: i, streak });
       }
     });
     return list;
-  }, [todaysFoundations]);
+  }, [todaysFoundations, historyLogs]);
 
   return (
     <div className="min-h-screen bg-app-main text-app-main pb-24 transition-colors duration-500">
@@ -197,7 +263,7 @@ export default function FoundationPage() {
       <main className="mx-auto max-w-md px-6 pt-6 relative">
         {/* Top Actions */}
         <div className="absolute top-4 right-4 flex gap-4 items-center">
-          {/* Gold Streak Counter (New Request) */}
+          {/* Gold Streak Counter */}
           <div className="flex items-center gap-1 text-yellow-600">
             <span className="text-lg">🏆</span>
             <span className="text-xs font-bold">{currentGoldStreak}</span>
@@ -225,8 +291,6 @@ export default function FoundationPage() {
           <h1 className="text-xl md:text-2xl font-serif italic text-app-main leading-relaxed px-4">
             &ldquo;{dailyIntention?.content || "Discipline is the bridge between goals and accomplishment."}&rdquo;
           </h1>
-
-          {/* Banner Removed per user request */}
         </header>
 
         {isEditing ? (
@@ -254,17 +318,17 @@ export default function FoundationPage() {
             </div>
 
             {/* Habit Grid */}
-            <section className="grid grid-cols-3 gap-6 place-items-center data-[text-size='large']:grid-cols-2 data-[text-size='xl']:grid-cols-2">
-              {bubbles.map(({ foundation, index }) => {
-                const logsForHabit = logs.filter(l => l.foundation_id === foundation.id);
+            <section className={`grid gap-6 place-items-center ${gridClass}`}>
+              {bubbles.map(({ foundation, index, streak }) => {
+                const logsForHabit = todaysLogs.filter(l => l.foundation_id === foundation.id);
                 const completed = logsForHabit.length > index;
 
                 // "Gold Ready" logic 
                 const totalNeeds = bubbles.length;
-                const validLogs = logs.length;
+                const validLogs = todaysLogs.length;
                 const isGoldReady = (validLogs === totalNeeds - 1) && !completed;
 
-                // Visual Gold State - All turn gold when streak is complete
+                // Visual Gold State
                 const goldAll = isGoldComplete && isSameDay(parseISO(selectedDate), new Date());
 
                 return (
@@ -273,6 +337,7 @@ export default function FoundationPage() {
                       id={foundation.id}
                       title={foundation.title}
                       completed={completed}
+                      streak={streak}
                       isGoldReady={isGoldReady}
                       isGoldState={goldAll}
                       onToggle={() => handleBubbleToggle(foundation, index)}

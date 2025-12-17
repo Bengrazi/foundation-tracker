@@ -8,7 +8,6 @@ import { supabase } from "@/lib/supabaseClient";
 import { applySavedTextSize, setTextSize, TextSize } from "@/lib/textSize";
 import { applySavedTheme, setTheme, Theme } from "@/lib/theme";
 import { useGlobalState } from "@/components/GlobalStateProvider";
-import { HabitManager } from "@/components/HabitManager";
 
 const ONBOARDING_KEY = "foundation_onboarding_done_v1";
 
@@ -81,8 +80,14 @@ export default function SettingsPage() {
     applySavedTheme();
 
     if (typeof window !== "undefined") {
+      // Robust state sync
       const savedTextSize = localStorage.getItem("foundation_ui_text_size_v1") as TextSize | null;
-      if (savedTextSize) setTextSizeState(savedTextSize);
+      if (savedTextSize) {
+        setTextSizeState(savedTextSize);
+      } else {
+        const docSize = document.documentElement.dataset.textSize as TextSize;
+        if (docSize) setTextSizeState(docSize);
+      }
 
       const savedTheme = localStorage.getItem("foundation_theme") as Theme | null;
       if (savedTheme) setThemeState(savedTheme);
@@ -245,11 +250,7 @@ export default function SettingsPage() {
           <h1 className="text-lg font-semibold text-app-main">Settings</h1>
         </section>
 
-        {/* Habit Manager */}
-        <section className="space-y-4 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
-          <h2 className="text-sm font-semibold text-app-main">Your Habits</h2>
-          <HabitManager />
-        </section>
+        {/* Removed Habit Manager Section per request */}
 
         {/* Appearance */}
         <section className="space-y-4 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
