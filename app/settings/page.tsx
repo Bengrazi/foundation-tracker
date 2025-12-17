@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
 import { supabase } from "@/lib/supabaseClient";
 import { applySavedTextSize, setTextSize, TextSize } from "@/lib/textSize";
+import { applySavedTheme, setTheme, Theme } from "@/lib/theme";
+import { useGlobalState } from "@/components/GlobalStateProvider";
+import { HabitManager } from "@/components/HabitManager";
 
 const ONBOARDING_KEY = "foundation_onboarding_done_v1";
 
@@ -39,11 +42,6 @@ function downloadCsv(filename: string, csv: string) {
   URL.revokeObjectURL(url);
 }
 
-import { applySavedTheme, setTheme, Theme } from "@/lib/theme";
-import { useGlobalState } from "@/components/GlobalStateProvider";
-
-// ... (imports)
-
 export default function SettingsPage() {
   const router = useRouter();
   const [exporting, setExporting] = useState<ExportRange | null>(null);
@@ -56,14 +54,6 @@ export default function SettingsPage() {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("foundation_ai_coach_enabled");
       return saved !== null ? saved === "true" : true;
-    }
-    return true;
-  });
-
-  const [showPlans, setShowPlans] = useState(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("foundation_show_plans");
-      return saved !== null ? saved !== "false" : true;
     }
     return true;
   });
@@ -127,24 +117,16 @@ export default function SettingsPage() {
         .select("*")
         .order("date", { ascending: true });
 
-      const goalsPromise = supabase
-        .from("goals")
-        .select("*")
-        .order("target_date", { ascending: true });
-
-      const [logsRes, reflRes, goalsRes] = await Promise.all([
+      const [logsRes, reflRes] = await Promise.all([
         logsPromise,
         reflectionsPromise,
-        goalsPromise,
       ]);
 
       if (logsRes.error) console.error("Export logs error", logsRes.error);
       if (reflRes.error) console.error("Export reflections error", reflRes.error);
-      if (goalsRes.error) console.error("Export goals error", goalsRes.error);
 
       const logs = (logsRes.data || []) as any[];
       const reflections = (reflRes.data || []) as any[];
-      const goals = (goalsRes.data || []) as any[];
 
       const rows: (string | number | null | undefined)[][] = [];
 
@@ -172,17 +154,6 @@ export default function SettingsPage() {
         ]);
       }
 
-      // goals (always export all)
-      for (const g of goals) {
-        rows.push([
-          "goal",
-          g.target_date ?? "",
-          g.title ?? "",
-          g.status ?? "",
-          g.horizon ?? "",
-        ]);
-      }
-
       const headers = ["type", "date", "field1", "field2", "field3"];
       const csv = toCsv(headers, rows);
 
@@ -207,20 +178,17 @@ export default function SettingsPage() {
     try {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth?.user) {
-        // Still clear onboarding so they see questions again
         window.localStorage.removeItem(ONBOARDING_KEY);
         router.push("/foundation");
         return;
       }
 
-      // RLS should ensure we only delete the current user's rows
       const results = await Promise.all([
         supabase.from("foundation_logs").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("foundations").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("reflections").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("goals").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("daily_intentions").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-        // Clear onboarding fields instead of deleting profile
         supabase.from("profiles").update({
           priorities: null,
           life_summary: null,
@@ -231,32 +199,15 @@ export default function SettingsPage() {
         supabase.from("board_members").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
       ]);
 
-      // Log any errors
-      console.log("[Reset] Deletion results:", results);
-      results.forEach((result, index) => {
-        const tables = ["foundation_logs", "foundations", "reflections", "goals", "daily_intentions", "profiles", "board_members"];
-        if (result.error) {
-          console.error(`[Reset] Failed to delete from ${tables[index]}:`, result.error);
-        } else {
-          console.log(`[Reset] Successfully deleted from ${tables[index]}`);
-        }
-      });
-
-      // Do NOT sign out. Just clear onboarding flag so they see questions again.
+      // Clear local storage logic...
       window.localStorage.removeItem(ONBOARDING_KEY);
-
-      // Clear celebration flags so first gold celebration shows again
       window.localStorage.removeItem("foundation_first_gold_celebration_shown");
-
-      // Clear all date-specific celebration limits
       Object.keys(window.localStorage).forEach(key => {
         if (key.startsWith("foundation_celebration_")) {
           window.localStorage.removeItem(key);
         }
       });
 
-      // Send them back to Foundation; onboarding modal will appear again.
-      // Update global state to reflect cleared data
       await Promise.all([
         refreshPoints(),
         refreshGoals(),
@@ -281,7 +232,6 @@ export default function SettingsPage() {
   const themeOptions: { label: string; value: Theme }[] = [
     { label: "Dark", value: "dark" },
     { label: "Light", value: "light" },
-
     { label: "Cherry", value: "cherry" },
     { label: "Cherry Dark", value: "cherry-dark" },
   ];
@@ -293,15 +243,17 @@ export default function SettingsPage() {
       <main className="mx-auto flex max-w-md flex-col gap-6 px-4 pb-24 pt-4">
         <section>
           <h1 className="text-lg font-semibold text-app-main">Settings</h1>
-          <p className="mt-1 text-xs text-app-muted">
-            Tune your Cherry experience, export your data, or reset this device.
-          </p>
         </section>
 
-        {/* Appearance (Theme + Text Size combined) */}
+        {/* Habit Manager */}
+        <section className="space-y-4 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
+          <h2 className="text-sm font-semibold text-app-main">Your Habits</h2>
+          <HabitManager />
+        </section>
+
+        {/* Appearance */}
         <section className="space-y-4 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
           <h2 className="text-sm font-semibold text-app-main">Appearance</h2>
-
           {/* Theme */}
           <div className="space-y-2">
             <p className="text-xs text-app-muted">Theme</p>
@@ -311,7 +263,6 @@ export default function SettingsPage() {
                 return (
                   <button
                     key={opt.value}
-                    type="button"
                     onClick={() => {
                       setTheme(opt.value);
                       setThemeState(opt.value);
@@ -329,7 +280,6 @@ export default function SettingsPage() {
               })}
             </div>
           </div>
-
           {/* Text Size */}
           <div className="space-y-2 pt-2 border-t border-app-border/50">
             <p className="text-xs text-app-muted">Text size</p>
@@ -339,7 +289,6 @@ export default function SettingsPage() {
                 return (
                   <button
                     key={opt.value}
-                    type="button"
                     onClick={() => {
                       setTextSize(opt.value);
                       setTextSizeState(opt.value);
@@ -362,8 +311,6 @@ export default function SettingsPage() {
         {/* Features */}
         <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
           <h2 className="text-sm font-semibold text-app-main">Features</h2>
-
-          {/* AI Coach */}
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs font-medium text-app-main">AI Coach</div>
@@ -379,28 +326,6 @@ export default function SettingsPage() {
               <div className="peer h-5 w-9 rounded-full bg-app-card-hover ring-1 ring-app-border after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-app-accent peer-checked:after:translate-x-full"></div>
             </label>
           </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-medium text-app-main">Show Plans</div>
-              <div className="text-[10px] text-app-muted">Goals and long-term vision</div>
-            </div>
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input
-                type="checkbox"
-                checked={showPlans}
-                onChange={(e) => {
-                  const val = e.target.checked;
-                  setShowPlans(val);
-                  localStorage.setItem("foundation_show_plans", String(val));
-                  window.location.reload(); // Reload to update nav
-                }}
-                className="peer sr-only"
-              />
-              <div className="peer h-5 w-9 rounded-full bg-app-card-hover ring-1 ring-app-border after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-app-accent peer-checked:after:translate-x-full"></div>
-            </label>
-          </div>
-
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs font-medium text-app-main">Show Journal</div>
@@ -421,7 +346,6 @@ export default function SettingsPage() {
               <div className="peer h-5 w-9 rounded-full bg-app-card-hover ring-1 ring-app-border after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-app-accent peer-checked:after:translate-x-full"></div>
             </label>
           </div>
-
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs font-medium text-app-main">Daily AI Question</div>
@@ -447,16 +371,13 @@ export default function SettingsPage() {
         {/* Export */}
         <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-app-main">
-              Export data
-            </h2>
+            <h2 className="text-sm font-semibold text-app-main">Export data</h2>
           </div>
           <p className="text-xs text-app-muted">
             Download your logs, reflections, and goals as a CSV file.
           </p>
           <div className="flex gap-2">
             <button
-              type="button"
               onClick={() => handleExportData("30")}
               disabled={exporting !== null}
               className="flex-1 rounded-full bg-app-card-hover px-3 py-1.5 text-xs text-app-main ring-1 ring-app-border hover:bg-app-card disabled:opacity-60"
@@ -464,7 +385,6 @@ export default function SettingsPage() {
               {exporting === "30" ? "Exporting…" : "Last 30 days"}
             </button>
             <button
-              type="button"
               onClick={() => handleExportData("all")}
               disabled={exporting !== null}
               className="flex-1 rounded-full bg-app-card-hover px-3 py-1.5 text-xs text-app-main ring-1 ring-app-border hover:bg-app-card disabled:opacity-60"
@@ -472,19 +392,12 @@ export default function SettingsPage() {
               {exporting === "all" ? "Exporting…" : "All time"}
             </button>
           </div>
-          <p className="text-[11px] text-app-muted">
-            Exports are private and stay on your device unless you share the file.
-          </p>
         </section>
 
         {/* Account */}
         <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
           <h2 className="text-sm font-semibold text-app-main">Account</h2>
-          <p className="text-xs text-app-muted">
-            Manage your account settings.
-          </p>
           <button
-            type="button"
             onClick={() => {
               window.location.href = "/auth/reset-password";
             }}
@@ -497,21 +410,7 @@ export default function SettingsPage() {
         {/* Reset */}
         <section className="space-y-3 rounded-2xl bg-app-card p-4 ring-1 ring-red-500/50">
           <h2 className="text-sm font-semibold text-red-400">Reset app</h2>
-          <p className="text-xs text-app-muted">
-            Reset Cherry on <strong>this device only</strong>. This:
-          </p>
-          <ul className="list-disc pl-5 text-xs text-app-muted">
-            <li>Clears habits, streaks, and notes.</li>
-            <li>Clears reflections.</li>
-            <li>Clears current goals and daily intentions.</li>
-            <li>Keeps your login session.</li>
-          </ul>
-          <p className="text-[11px] text-app-muted">
-            After reset, you&apos;ll be taken back through the starting questions so
-            your goals and daily intention can be recreated by AI.
-          </p>
           <button
-            type="button"
             onClick={handleReset}
             disabled={resetting}
             className="mt-1 w-full rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-white hover:bg-red-400 disabled:opacity-60"

@@ -39,6 +39,11 @@ export interface Foundation {
     start_date: string;
     end_date: string | null;
     user_id: string;
+
+    // New fields for Discipline-First
+    order_index?: number;
+    days_of_week?: string[]; // e.g. ["Mon", "Tue"]
+    times_per_day?: number; // e.g. 1
 }
 
 export interface UserProfile {

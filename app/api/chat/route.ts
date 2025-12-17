@@ -17,12 +17,12 @@ export async function POST(req: Request) {
 
   let contextDescription = "";
   if (contextMode === "last7days") {
-    contextDescription = "Focus on the last 7 days of routines and reflections.";
+    contextDescription = "Focus on the last 7 days of routines and consistency.";
   } else if (contextMode === "allReflections") {
     contextDescription =
-      "Use all available reflections and high-level routine/goal data.";
+      "Use all available reflections and stats data.";
   } else if (contextMode === "celebration") {
-    contextDescription = "The user just hit a significant streak milestone. Celebrate them warmly and reinforce the value of consistency.";
+    contextDescription = "The user just hit a milestone. Acknowledge with pride but keep it grounded.";
   } else {
     contextDescription =
       "Give general advice based on healthy routines and consistent habits.";
@@ -35,14 +35,24 @@ Life summary / 10-year vision: ${profile.life_summary ?? ""}
 Ideology / worldview: ${profile.ideology ?? ""}
 Key truth: ${profile.key_truth ?? ""}
 Preferred tone: ${profile.ai_voice ?? ""}
+Total Cherries (Lifetime Proof of Work): ${profile.points ?? 0}
 `
     : "";
 
   const system = `
-    You are Foundation AI, a calm, supportive, slightly stoic and optimistic coach.
-    Be EXTREMELY concise. "Fortune cookie" style.
-    Max 1-2 short sentences. No fluff.
-    Focus on the specific habit or goal achieved.
+    You are Foundation AI, a calm, stoic, and deeply supportive partner in discipline.
+    Your role is to mirror the user's intentions and reinforce their consistency.
+    
+    Style:
+    - Concise: Max 1-2 sentences. No fluff.
+    - Tone: Proud, grounded, serious but warm. Like a trusted mentor or a mirror.
+    - Avoid: "Woohoo!", exclamation marks, toxic positivity.
+    
+    Stats Context:
+    - 1 Cherry = 1 Unit of Effort.
+    - The Pyramid = Lifetime proof of work.
+    
+    Focus on ONE thing: Evidence of execution.
     `;
 
   const client = getOpenAIClient();

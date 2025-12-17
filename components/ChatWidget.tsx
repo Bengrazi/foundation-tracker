@@ -10,7 +10,11 @@ type ChatMessage = {
     content: string;
 };
 
-export function ChatWidget() {
+interface ChatWidgetProps {
+    contextMode?: "last7days" | "allReflections" | "celebration" | "general" | "stats";
+}
+
+export function ChatWidget({ contextMode = "general" }: ChatWidgetProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
@@ -73,7 +77,7 @@ export function ChatWidget() {
             const res = await fetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: content, profile, goals }),
+                body: JSON.stringify({ message: content, profile, goals, contextMode }),
             });
 
             const json = await res.json();

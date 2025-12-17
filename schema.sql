@@ -29,8 +29,12 @@ CREATE TABLE IF NOT EXISTS public.foundations (
   id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id uuid REFERENCES auth.users ON DELETE CASCADE NOT NULL,
   title text NOT NULL,
+  -- Deprecated: schedule_type, x_per_week
   schedule_type text NOT NULL,
   x_per_week int,
+  -- Discipline-First Columns
+  days_of_week text[], -- Array of strings e.g. ['Mon', 'Tue', 'Fri']
+  times_per_day int DEFAULT 1,
   start_date text NOT NULL,
   end_date text,
   order_index int DEFAULT 0,
@@ -124,6 +128,13 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS points int DEFAULT 0;
 ALTER TABLE public.foundations ADD COLUMN IF NOT EXISTS order_index int DEFAULT 0;
 ALTER TABLE public.goals ADD COLUMN IF NOT EXISTS order_index int DEFAULT 0;
 ALTER TABLE public.daily_intentions ADD COLUMN IF NOT EXISTS question text;
+
+-- Discipline-First Pivot Columns
+ALTER TABLE public.foundations ADD COLUMN IF NOT EXISTS days_of_week text[];
+ALTER TABLE public.foundations ADD COLUMN IF NOT EXISTS times_per_day int DEFAULT 1;
+
+-- Ensure profiles has points (total_cherries)
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS points int DEFAULT 0;
 
 -- ============================================
 -- 4. ENABLE ROW LEVEL SECURITY
