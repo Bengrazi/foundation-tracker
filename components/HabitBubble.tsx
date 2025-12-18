@@ -6,8 +6,8 @@ import { motion } from "framer-motion";
 interface HabitBubbleProps {
     id: string;
     title: string;
-    currentCount: number;  // How many times done today
-    targetCount: number;   // Goal (e.g. 1, 2, 3)
+    currentCount: number;
+    targetCount: number;
     streak: number;
     onToggle: () => void;
     onLongPress: () => void;
@@ -30,7 +30,6 @@ export function HabitBubble({
     const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
 
     const completed = currentCount >= targetCount;
-    const progress = Math.min(currentCount / targetCount, 1);
 
     const handlePointerDown = () => {
         setIsPressing(true);
@@ -47,21 +46,15 @@ export function HabitBubble({
     };
 
     // --- SVG Logic for Segments ---
-    // We'll draw an SVG overlay.
-    // Radius for the stroke
     const R = 42;
-    const C = 2 * Math.PI * R; // Circumference
+    const C = 2 * Math.PI * R;
 
-    // If multiple segments, we need gaps.
-    const gapPercent = targetCount > 1 ? 0.05 : 0; // 5% gap
+    const gapPercent = targetCount > 1 ? 0.05 : 0;
     const segmentLength = (1 - gapPercent * targetCount) / targetCount;
     const strokeLength = C * segmentLength;
-    const gapLength = C * gapPercent;
 
-    // Create an array of segments
     const segments = Array.from({ length: targetCount }).map((_, i) => {
         const isFilled = i < currentCount;
-        // Rotation: start from top (-90deg), + offset per segment
         const rotation = -90 + (i * (360 / targetCount));
 
         return {
@@ -71,34 +64,37 @@ export function HabitBubble({
         };
     });
 
+    // Calculate text color class to ensure high contrast
+    let textColorClass = "text-app-main"; // Default (read-able on card bg)
+    if (isGoldState) {
+        textColorClass = "text-white";
+    } else if (completed) {
+        // When completed, we fill the bubble with accent color.
+        // So we need text that contrasts with accent color.
+        // Usually white for dark accents, or dark for light accents.
+        // We use the CSS variable for accent text color.
+        textColorClass = "text-app-accent-text";
+    }
+
     return (
         <motion.button
             className={`relative flex flex-col items-center justify-center w-full aspect-square rounded-full transition-all duration-300 shadow-sm
         ${isGoldState
-                    ? "bg-gradient-to-br from-amber-300 to-yellow-500 text-white border-yellow-600 shadow-lg shadow-yellow-500/30 ring-2 ring-yellow-400/50"
-                    : "bg-app-card border-app-border text-app-main hover:border-app-accent/50"
+                    ? "bg-gradient-to-br from-amber-300 to-yellow-500 border-yellow-600 shadow-lg shadow-yellow-500/30 ring-2 ring-yellow-400/50"
+                    : "bg-app-card border-app-border hover:border-app-accent/50" // Base state
                 }
-         ${completed && !isGoldState ? "border-app-accent" : ""}
+         ${completed && !isGoldState ? "bg-app-accent border-app-accent" : ""} 
       `}
-            style={{
-                // If completed, fill background. If partial, maybe just stroke?
-                // User wants: "fill up 1 at a time until full".
-                // So background is white/card, segments fill with color.
-                // Once full, maybe the whole bg fills? 
-                // Let's rely on SVG for the "fill" visualization primarily, 
-                // but IF completed, we fill the BG to match the "solid circle" look.
-                backgroundColor: completed && !isGoldState ? "var(--accent-color)" : undefined
-            }}
             onClick={onToggle}
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
             whileTap={{ scale: 0.95 }}
         >
-            {/* SVG Progress Ring (Only if not gold state, as gold state overrides everything) */}
+            {/* SVG Progress Ring */}
             {!isGoldState && (
                 <svg className="absolute inset-0 w-full h-full p-0.5 pointer-events-none" viewBox="0 0 100 100">
-                    {/* Background Track (faint) */}
+                    {/* Background Track */}
                     {segments.map((seg) => (
                         <circle
                             key={`track-${seg.index}`}
@@ -106,39 +102,37 @@ export function HabitBubble({
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="8"
-                            strokeOpacity="0.1"
+                            strokeOpacity="0.1" // Faint track
                             strokeDasharray={`${strokeLength} ${C - strokeLength}`}
                             strokeDashoffset={0}
                             transform={`rotate(${seg.rotation} 50 50)`}
                         />
                     ))}
 
-                    {/* Filled Segments */}
+                    {/* Filled Segments with Animation */}
                     {segments.map((seg) => (
-                        <circle
+                        <motion.circle
                             key={`fill-${seg.index}`}
                             cx="50" cy="50" r={R}
                             fill="none"
-                            stroke={completed ? "transparent" : "var(--accent-color)"} // If full completed, we fill BG via CSS, so hide stroke to avoid aliasing? Or keep it?
+                            stroke={completed ? "transparent" : "var(--accent-color)"} // Hide stroke if solid fill? Actually lets keep text legible. If solid fill, we don't need ring.
                             strokeWidth="8"
                             strokeLinecap={targetCount > 1 ? "round" : "butt"}
                             strokeDasharray={`${strokeLength} ${C - strokeLength}`}
                             strokeDashoffset={0}
                             transform={`rotate(${seg.rotation} 50 50)`}
-                            className={`transition-all duration-300 ${seg.isFilled ? "opacity-100" : "opacity-0"}`}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: seg.isFilled ? 1 : 0 }}
+                            transition={{ duration: 0.3 }}
                         />
                     ))}
                 </svg>
             )}
 
             {/* Content */}
-            <div className={`relative z-10 flex flex-col items-center justify-center p-3 text-center pointer-events-none select-none w-full h-full
-            ${completed && !isGoldState ? "text-app-accent-text" : "text-app-main"}
-            ${isGoldState ? "text-white" : ""}
-        `}>
+            <div className={`relative z-10 flex flex-col items-center justify-center p-3 text-center pointer-events-none select-none w-full h-full ${textColorClass}`}>
                 {/* Title */}
                 <span className="font-semibold leading-tight line-clamp-2 w-full break-words text-[10px] sm:text-xs">
-                    {/* Note: Utilizing Tailwind arbitrary values or relying on inherited font-size from parent grid if possible */}
                     {title}
                 </span>
 
@@ -152,16 +146,16 @@ export function HabitBubble({
                     )}
                 </div>
 
-                {/* Multi-step Counter if partial */}
+                {/* Counter */}
                 {!completed && targetCount > 1 && (
                     <div className="absolute bottom-2 text-[8px] opacity-60 font-mono">
                         {currentCount}/{targetCount}
                     </div>
                 )}
 
-                {/* Completed Checkmark (Subtle) */}
+                {/* Checkmark */}
                 {completed && !isGoldState && (
-                    <div className="absolute inset-0 flex items-center justify-center opacity-10">
+                    <div className="absolute inset-0 flex items-center justify-center opacity-20">
                         <span className="text-4xl font-bold">✓</span>
                     </div>
                 )}
