@@ -31,28 +31,22 @@ export async function POST(req: Request) {
   const profileText = profile
     ? `
 User priorities: ${profile.priorities ?? ""}
-Life summary / 10-year vision: ${profile.life_summary ?? ""}
-Ideology / worldview: ${profile.ideology ?? ""}
-Key truth: ${profile.key_truth ?? ""}
-Preferred tone: ${profile.ai_voice ?? ""}
-Total Cherries (Lifetime Proof of Work): ${profile.points ?? 0}
+Life summary: ${profile.life_summary ?? ""}
+Ideology: ${profile.ideology ?? ""}
+points: ${profile.points ?? 0}
 `
     : "";
 
   const system = `
-    You are Foundation AI, a calm, stoic, and deeply supportive partner in discipline.
-    Your role is to mirror the user's intentions and reinforce their consistency.
+    You are Foundation AI, a stoic, concise mentor.
+    
+    CRITICAL INSTRUCTION: Your response must be EXTREMELY SHORT. 
+    Maximum 20 words. Preferably 10.
     
     Style:
-    - Concise: Max 1-2 sentences. No fluff.
-    - Tone: Proud, grounded, serious but warm. Like a trusted mentor or a mirror.
-    - Avoid: "Woohoo!", exclamation marks, toxic positivity.
-    
-    Stats Context:
-    - 1 Cherry = 1 Unit of Effort.
-    - The Pyramid = Lifetime proof of work.
-    
-    Focus on ONE thing: Evidence of execution.
+    - Concise: 1 sentence.
+    - Tone: Proud, grounded.
+    - No "Woohoo!".
     `;
 
   const client = getOpenAIClient();
@@ -69,10 +63,9 @@ Total Cherries (Lifetime Proof of Work): ${profile.points ?? 0}
       {
         role: "user",
         content:
-          `Context mode: ${contextDescription}\n\n` +
-          (profileText ? `User profile:\n${profileText}\n\n` : "") +
-          (goalsText ? `${goalsText}\n\n` : "") +
-          `User says: ${message}`,
+          `Context: ${contextDescription}\n` +
+          (profileText ? `Profile: ${profileText}\n` : "") +
+          `User: ${message}`,
       },
     ],
   });

@@ -31,35 +31,35 @@ function matchesSpecificDays(days: string[] | null | undefined, dateStr: string)
   return days.includes(dayName);
 }
 
-// Calculate streak based on logs and foundation schedule
 function calculateStreak(foundationId: string, logs: FoundationLog[], endDateStr: string): number {
   const relevantLogs = logs
     .filter(l => l.foundation_id === foundationId && l.completed)
-    .sort((a, b) => b.date.localeCompare(a.date)); // Descending
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   let streak = 0;
   let checkDate = parseISO(endDateStr);
 
-  // Check up to 100 days back
+  // Simplistic Streak Check (consecutive days with at least 1 completion)
+  // Note: For multi-time habits, this counts "at least once" as maintaining streak?
+  // User requested "Gold Streak is accomplished when ALL... are full".
+  // But individual streak? Let's assume maintain streak if you did *something* or maybe *everything*?
+  // Standard habit trackers usually count "Target Met" as streak. 
+  // Let's assume "Target Met" for the streak calculation.
+
+  // We need to know the TARGET for those past days. This is hard because habits change.
+  // Simplifying assumption: If you did ANY rep on a past day, it counts? 
+  // Or let's try to enforce stricter: You need >=1 log? 
+  // Actually, let's stick to "At least one completion" keeps the fire burning for now, to be forgiving.
+
   for (let i = 0; i < 100; i++) {
     const dateStr = format(checkDate, "yyyy-MM-dd");
+    // For this date, did we have logs?
+    const count = relevantLogs.filter(l => l.date === dateStr).length;
 
-    // Find if completed on this date
-    const isDone = relevantLogs.some(l => l.date === dateStr);
-
-    // If done, increment. 
-    if (isDone) {
+    if (count > 0) {
       streak++;
     } else {
-      // If NOT done, checking if it was today.
-      // If today is not done yet, streak isn't broken, just doesn't include today.
-      // UNLESS we are checking a past chain.
-      if (dateStr === endDateStr) {
-        // Today not done, continue to yesterday
-      } else {
-        // Break streak if miss
-        break;
-      }
+      if (dateStr !== endDateStr) break;
     }
     checkDate = subDays(checkDate, 1);
   }
@@ -78,7 +78,7 @@ export default function FoundationPage() {
 
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [todaysLogs, setTodaysLogs] = useState<FoundationLog[]>([]);
-  const [historyLogs, setHistoryLogs] = useState<FoundationLog[]>([]); // For streak calc
+  const [historyLogs, setHistoryLogs] = useState<FoundationLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState("");
@@ -105,9 +105,18 @@ export default function FoundationPage() {
     }).sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
   }, [globalFoundations, selectedDate]);
 
-  // -- Grid Columns Logic --
+  // -- Text Size Logic --
+  const textSizeClass = useMemo(() => {
+    const size = userProfile?.text_size || "small";
+    switch (size) {
+      case "xl": return "text-lg"; // Bubbles text will inherit or scale relative
+      case "large": return "text-base";
+      case "medium": return "text-sm";
+      default: return "text-xs";
+    }
+  }, [userProfile]);
+
   const gridClass = useMemo(() => {
-    // Check user profile text size
     const size = userProfile?.text_size || "small";
     if (size === "large" || size === "xl") {
       return "grid-cols-2";
@@ -123,14 +132,12 @@ export default function FoundationPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Logs for Today (Fast)
       const { data: todayData } = await supabase
         .from("foundation_logs")
         .select("*")
         .eq("date", selectedDate)
         .eq("completed", true);
 
-      // 2. Logs for History (last 90 days) for streaks
       const startHistoryParams = format(subDays(new Date(), 90), "yyyy-MM-dd");
       const { data: histData } = await supabase
         .from("foundation_logs")
@@ -138,7 +145,6 @@ export default function FoundationPage() {
         .gte("date", startHistoryParams)
         .eq("completed", true);
 
-      // 3. Best Gold Streak
       const { data: streakData } = await supabase
         .from("celebrations")
         .select("streak_days")
@@ -158,7 +164,7 @@ export default function FoundationPage() {
     return () => { cancelled = true; };
   }, [selectedDate, globalFoundations]);
 
-  // -- Gold Streak Status --
+  // -- Gold Streak Status (ALL habits fully complete) --
   const isGoldComplete = useMemo(() => {
     if (todaysFoundations.length === 0) return false;
 
@@ -169,26 +175,18 @@ export default function FoundationPage() {
     });
   }, [todaysFoundations, todaysLogs]);
 
-  const handleBubbleToggle = async (foundation: Foundation, index: number) => {
+  // -- Toggle Logic: Fill ONE segment at a time --
+  const handleBubbleClick = async (foundation: Foundation, currentCount: number, targetCount: number) => {
     if (isEditing) return;
 
-    const currentLogs = todaysLogs.filter(l => l.foundation_id === foundation.id);
-    const completionCount = currentLogs.length;
-
-    const isCompleted = completionCount > index;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    if (isCompleted) {
-      // Remove
-      const logToRemove = currentLogs[0];
-      if (!logToRemove) return;
-      setTodaysLogs(prev => prev.filter(l => l.id !== logToRemove.id));
-      // Also update history logs for streak consistency on live toggle
-      setHistoryLogs(prev => prev.filter(l => l.id !== logToRemove.id));
-      await supabase.from("foundation_logs").delete().eq("id", logToRemove.id);
-    } else {
-      // Add
+    // Logic: If not full, ADD log. If full, Remove ALL logs? Or remove last log?
+    // Usually "toggle" implies Undo if full.
+
+    if (currentCount < targetCount) {
+      // ADD LOG
       const tempId = `temp-${Date.now()}`;
       const newLog = {
         id: tempId,
@@ -215,7 +213,13 @@ export default function FoundationPage() {
         await refreshPoints();
 
         // Check Gold Streak (Live)
-        const updatedLogs = [...todaysLogs, newLog];
+        // We need to check if THIS addition made everything complete
+        const updatedLogs = [...todaysLogs, newLog]; // Note: using local var, state might lag slightly implies we should be careful. 
+        // Actually state update is async, so `todaysLogs` is old. `updatedLogs` is better.
+        // Wait, `updatedLogs` combines old `todaysLogs` + `newLog`. 
+        // But `todaysLogs` state update hasn't processed yet? `setTodaysLogs` queues it.
+        // So standard closure issue. We trust the local `updatedLogs`.
+
         const allDone = todaysFoundations.every(f => {
           const req = f.times_per_day || 1;
           const cnt = updatedLogs.filter(l => l.foundation_id === f.id).length;
@@ -223,34 +227,28 @@ export default function FoundationPage() {
         });
 
         if (allDone && !isGoldComplete) {
-          // Celebration
           setCelebrationMessage("Gold Streak Achieved! Discipline is destiny.");
           setShowCelebration(true);
-          // Optimistically increment streak for display
           setCurrentGoldStreak(prev => prev + 1);
         }
+      }
+    } else {
+      // REMOVE LAST LOG (Undo)
+      const currentLogs = todaysLogs
+        .filter(l => l.foundation_id === foundation.id)
+        .sort((a, b) => b.id.localeCompare(a.id)); // sort by ID desc roughly
+
+      const logToRemove = currentLogs[0];
+      if (logToRemove) {
+        setTodaysLogs(prev => prev.filter(l => l.id !== logToRemove.id));
+        setHistoryLogs(prev => prev.filter(l => l.id !== logToRemove.id));
+        await supabase.from("foundation_logs").delete().eq("id", logToRemove.id);
       }
     }
   };
 
-  const bubbles = useMemo(() => {
-    const list: any[] = [];
-    const today = format(new Date(), "yyyy-MM-dd");
-
-    todaysFoundations.forEach(f => {
-      const times = f.times_per_day || 1;
-      // Calculate streak
-      const streak = calculateStreak(f.id, historyLogs, today);
-
-      for (let i = 0; i < times; i++) {
-        list.push({ foundation: f, index: i, streak });
-      }
-    });
-    return list;
-  }, [todaysFoundations, historyLogs]);
-
   return (
-    <div className="min-h-screen bg-app-main text-app-main pb-24 transition-colors duration-500">
+    <div className={`min-h-screen bg-app-main text-app-main pb-24 transition-colors duration-500 ${textSizeClass}`}>
       <AuthGuardHeader />
 
       {showCelebration && (
@@ -261,36 +259,35 @@ export default function FoundationPage() {
       )}
 
       <main className="mx-auto max-w-md px-6 pt-6 relative">
-        {/* Top Actions */}
-        <div className="absolute top-4 right-4 flex gap-4 items-center">
-          {/* Gold Streak Counter */}
-          <div className="flex items-center gap-1 text-yellow-600">
-            <span className="text-lg">🏆</span>
-            <span className="text-xs font-bold">{currentGoldStreak}</span>
-          </div>
-
-          <button
-            onClick={() => router.push("/reflect")}
-            className="text-xs text-app-muted hover:text-app-main underline"
-          >
-            Journal
-          </button>
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className={`text-xs ${isEditing ? "text-app-accent font-bold" : "text-app-muted hover:text-app-main"}`}
-          >
-            {isEditing ? "Done" : "Manage"}
-          </button>
-        </div>
-
-        {/* Header */}
-        <header className="mb-8 text-center pt-8">
+        {/* Header Area */}
+        <header className="mb-4 text-center pt-8">
           <p className="text-[10px] text-app-muted uppercase tracking-widest mb-2 font-semibold">
             {format(parseISO(selectedDate), "EEEE, MMMM d")}
           </p>
-          <h1 className="text-xl md:text-2xl font-serif italic text-app-main leading-relaxed px-4">
+          <h1 className="text-xl md:text-2xl font-serif italic text-app-main leading-relaxed px-4 mb-6">
             &ldquo;{dailyIntention?.content || "Discipline is the bridge between goals and accomplishment."}&rdquo;
           </h1>
+
+          {/* Controls: Gold Streak & Manage - Moved HERE */}
+          <div className="flex items-center justify-between px-4 py-2 bg-app-card/50 rounded-xl mb-6">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🏆</span>
+              <div className="flex flex-col items-start px-2">
+                <span className="text-xs font-bold text-yellow-600">Gold Streak</span>
+                <span className="text-lg font-bold leading-none">{currentGoldStreak}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${isEditing
+                ? "bg-app-accent text-app-accent-text border-app-accent"
+                : "border-app-border text-app-muted hover:text-app-main"
+                }`}
+            >
+              {isEditing ? "Done" : "Manage Habits"}
+            </button>
+          </div>
         </header>
 
         {isEditing ? (
@@ -308,7 +305,7 @@ export default function FoundationPage() {
         ) : (
           <>
             {/* Date Nav */}
-            <div className="flex justify-center mb-10">
+            <div className="flex justify-center mb-8">
               <input
                 type="date"
                 value={selectedDate}
@@ -319,28 +316,25 @@ export default function FoundationPage() {
 
             {/* Habit Grid */}
             <section className={`grid gap-6 place-items-center ${gridClass}`}>
-              {bubbles.map(({ foundation, index, streak }) => {
-                const logsForHabit = todaysLogs.filter(l => l.foundation_id === foundation.id);
-                const completed = logsForHabit.length > index;
+              {todaysFoundations.map((foundation) => {
+                // Calc logic
+                const currentCount = todaysLogs.filter(l => l.foundation_id === foundation.id).length;
+                const targetCount = foundation.times_per_day || 1;
+                const streak = calculateStreak(foundation.id, historyLogs, format(new Date(), "yyyy-MM-dd"));
 
-                // "Gold Ready" logic 
-                const totalNeeds = bubbles.length;
-                const validLogs = todaysLogs.length;
-                const isGoldReady = (validLogs === totalNeeds - 1) && !completed;
-
-                // Visual Gold State
+                // Gold Status Check
                 const goldAll = isGoldComplete && isSameDay(parseISO(selectedDate), new Date());
 
                 return (
-                  <div key={`${foundation.id}-${index}`} className="w-full flex justify-center">
+                  <div key={foundation.id} className="w-full flex justify-center">
                     <HabitBubble
                       id={foundation.id}
                       title={foundation.title}
-                      completed={completed}
-                      streak={streak}
-                      isGoldReady={isGoldReady}
+                      currentCount={currentCount}
+                      targetCount={targetCount}
+                      streak={streak} // Todo: Real streak logic
                       isGoldState={goldAll}
-                      onToggle={() => handleBubbleToggle(foundation, index)}
+                      onToggle={() => handleBubbleClick(foundation, currentCount, targetCount)}
                       onLongPress={() => setIsEditing(true)}
                     />
                   </div>
@@ -348,7 +342,7 @@ export default function FoundationPage() {
               })}
             </section>
 
-            {bubbles.length === 0 && (
+            {todaysFoundations.length === 0 && (
               <div className="text-center text-app-muted text-sm mt-10">
                 <p>No habits scheduled for today.</p>
                 <button onClick={() => setIsEditing(true)} className="text-app-accent hover:underline mt-2">
