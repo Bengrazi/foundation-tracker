@@ -39,18 +39,6 @@ function calculateStreak(foundationId: string, logs: FoundationLog[], endDateStr
   let streak = 0;
   let checkDate = parseISO(endDateStr);
 
-  // Simplistic Streak Check (consecutive days with at least 1 completion)
-  // Note: For multi-time habits, this counts "at least once" as maintaining streak?
-  // User requested "Gold Streak is accomplished when ALL... are full".
-  // But individual streak? Let's assume maintain streak if you did *something* or maybe *everything*?
-  // Standard habit trackers usually count "Target Met" as streak. 
-  // Let's assume "Target Met" for the streak calculation.
-
-  // We need to know the TARGET for those past days. This is hard because habits change.
-  // Simplifying assumption: If you did ANY rep on a past day, it counts? 
-  // Or let's try to enforce stricter: You need >=1 log? 
-  // Actually, let's stick to "At least one completion" keeps the fire burning for now, to be forgiving.
-
   for (let i = 0; i < 100; i++) {
     const dateStr = format(checkDate, "yyyy-MM-dd");
     // For this date, did we have logs?
@@ -182,9 +170,6 @@ export default function FoundationPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Logic: If not full, ADD log. If full, Remove ALL logs? Or remove last log?
-    // Usually "toggle" implies Undo if full.
-
     if (currentCount < targetCount) {
       // ADD LOG
       const tempId = `temp-${Date.now()}`;
@@ -212,14 +197,8 @@ export default function FoundationPage() {
         await awardPoints(user.id, POINTS.HABIT_COMPLETION, "habit_completion", foundation.id);
         await refreshPoints();
 
-        // Check Gold Streak (Live)
-        // We need to check if THIS addition made everything complete
-        const updatedLogs = [...todaysLogs, newLog]; // Note: using local var, state might lag slightly implies we should be careful. 
-        // Actually state update is async, so `todaysLogs` is old. `updatedLogs` is better.
-        // Wait, `updatedLogs` combines old `todaysLogs` + `newLog`. 
-        // But `todaysLogs` state update hasn't processed yet? `setTodaysLogs` queues it.
-        // So standard closure issue. We trust the local `updatedLogs`.
-
+        // Check Gold Streak achievement
+        const updatedLogs = [...todaysLogs, newLog];
         const allDone = todaysFoundations.every(f => {
           const req = f.times_per_day || 1;
           const cnt = updatedLogs.filter(l => l.foundation_id === f.id).length;
@@ -233,16 +212,17 @@ export default function FoundationPage() {
         }
       }
     } else {
-      // REMOVE LAST LOG (Undo)
-      const currentLogs = todaysLogs
-        .filter(l => l.foundation_id === foundation.id)
-        .sort((a, b) => b.id.localeCompare(a.id)); // sort by ID desc roughly
+      // FULL RESET: Remove ALL logs for this foundation on this date
+      const currentLogs = todaysLogs.filter(l => l.foundation_id === foundation.id);
 
-      const logToRemove = currentLogs[0];
-      if (logToRemove) {
-        setTodaysLogs(prev => prev.filter(l => l.id !== logToRemove.id));
-        setHistoryLogs(prev => prev.filter(l => l.id !== logToRemove.id));
-        await supabase.from("foundation_logs").delete().eq("id", logToRemove.id);
+      // Optimistic update
+      setTodaysLogs(prev => prev.filter(l => l.foundation_id !== foundation.id));
+      setHistoryLogs(prev => prev.filter(l => l.foundation_id !== foundation.id));
+
+      // Batch delete from DB
+      const idsToRemove = currentLogs.map(l => l.id);
+      if (idsToRemove.length > 0) {
+        await supabase.from("foundation_logs").delete().in("id", idsToRemove);
       }
     }
   };
@@ -268,7 +248,7 @@ export default function FoundationPage() {
             &ldquo;{dailyIntention?.content || "Discipline is the bridge between goals and accomplishment."}&rdquo;
           </h1>
 
-          {/* Controls: Gold Streak & Manage - Moved HERE */}
+          {/* Controls: Gold Streak & Manage */}
           <div className="flex items-center justify-between px-4 py-2 bg-app-card/50 rounded-xl mb-6">
             <div className="flex items-center gap-2">
               <span className="text-2xl">🏆</span>
@@ -332,7 +312,7 @@ export default function FoundationPage() {
                       title={foundation.title}
                       currentCount={currentCount}
                       targetCount={targetCount}
-                      streak={streak} // Todo: Real streak logic
+                      streak={streak}
                       isGoldState={goldAll}
                       onToggle={() => handleBubbleClick(foundation, currentCount, targetCount)}
                       onLongPress={() => setIsEditing(true)}

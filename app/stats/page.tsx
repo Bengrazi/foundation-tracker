@@ -15,12 +15,17 @@ export default function StatsPage() {
         totalHabitsCompleted: 0,
         daysActive: 0
     });
+    // We don't block render on loading, but we need initials
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const loadStats = async () => {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            if (!user) {
+                // Should be redirected by AuthGuard, but safety first
+                setLoading(false);
+                return;
+            }
 
             // 1. Fetch Profile (Cherries)
             const { data: profile } = await supabase
@@ -30,18 +35,24 @@ export default function StatsPage() {
                 .single();
 
             // 2. Fetch Logs for Habits Count & Days Active
-            const { data: logs } = await supabase
+            // Rely on RLS for user filtering to avoid inconsistencies
+            const { data: logs, error: logsError } = await supabase
                 .from("foundation_logs")
-                .select("date, completed")
-                .eq("user_id", user.id);
+                .select("date, completed");
+
+            if (logsError) {
+                console.error("Error fetching logs:", logsError);
+            }
 
             const safeLogs = logs || [];
-            const totalHabitsCompleted = safeLogs.filter(l => l.completed).length;
-            const uniqueDays = new Set(safeLogs.filter(l => l.completed).map(l => l.date));
+            // Filter completed just in case, though usually only true exist
+            const completedLogs = safeLogs.filter(l => l.completed);
+
+            const totalHabitsCompleted = completedLogs.length;
+            const uniqueDays = new Set(completedLogs.map(l => l.date));
             const daysActive = uniqueDays.size;
 
-            // 3. Gold Streak Data (Matching Foundation Page Logic)
-            // Just pull the *latest* gold streak value from celebrations.
+            // 3. Gold Streak Data
             const { data: latestGold } = await supabase
                 .from("celebrations")
                 .select("streak_days")
@@ -50,7 +61,6 @@ export default function StatsPage() {
                 .limit(1)
                 .maybeSingle();
 
-            // Also find max for "Best"
             const { data: maxGold } = await supabase
                 .from("celebrations")
                 .select("streak_days")
@@ -64,7 +74,7 @@ export default function StatsPage() {
                 currentGoldStreak: latestGold?.streak_days || 0,
                 bestGoldStreak: maxGold?.streak_days || 0,
                 totalHabitsCompleted,
-                daysActive: daysActive || 0
+                daysActive: daysActive || 1 // Default to 1 if new
             });
             setLoading(false);
         };
