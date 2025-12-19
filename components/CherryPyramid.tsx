@@ -7,6 +7,7 @@ import * as THREE from "three"
 
 // --- Constants ---
 const CHERRY_RADIUS = 0.15
+const COLLISION_RADIUS = 0.16 // Slightly larger than visual radius to prevent clipping
 const GRAVITY = -15
 const BOUNCE_DAMPING = 0.5
 const VELOCITY_THRESHOLD = 0.05
@@ -15,7 +16,6 @@ const BOWL_RADIUS = 2.5
 const BOWL_DEPTH = 1.5
 
 // 1. Static Cherry (Zero Overhead)
-// Renders a simple mesh at a fixed position. used for "Saved" cherries.
 function StaticCherry({ position }: { position: [number, number, number] }) {
     return (
         <mesh position={position} castShadow receiveShadow>
@@ -26,13 +26,13 @@ function StaticCherry({ position }: { position: [number, number, number] }) {
 }
 
 // 2. Physics Cherry (Falling)
-// Renders a falling cherry with custom physics. Used for "New" cherries.
 interface PhysicsCherryProps {
     startPosition: [number, number, number]
     delay: number
     onSettle: (finalPos: [number, number, number]) => void
     activeCherries: React.MutableRefObject<CherryState[]>
-    index: number // Index within the active list
+    staticPositions: [number, number, number][]
+    index: number
 }
 
 interface CherryState {
@@ -42,7 +42,7 @@ interface CherryState {
     radius: number
 }
 
-function PhysicsCherry({ startPosition, delay, onSettle, activeCherries, index }: PhysicsCherryProps) {
+function PhysicsCherry({ startPosition, delay, onSettle, activeCherries, staticPositions, index }: PhysicsCherryProps) {
     const meshRef = useRef<THREE.Mesh>(null)
     const [hasStarted, setHasStarted] = useState(false)
 
@@ -50,11 +50,10 @@ function PhysicsCherry({ startPosition, delay, onSettle, activeCherries, index }
         position: new THREE.Vector3(...startPosition),
         velocity: new THREE.Vector3(0, 0, 0),
         settled: false,
-        radius: CHERRY_RADIUS,
+        radius: COLLISION_RADIUS,
     })
 
     useEffect(() => {
-        // Register in the shared ref for collision checks
         activeCherries.current[index] = cherryState.current
         const timer = setTimeout(() => setHasStarted(true), delay)
         return () => clearTimeout(timer)
@@ -70,19 +69,15 @@ function PhysicsCherry({ startPosition, delay, onSettle, activeCherries, index }
         cs.position.addScaledVector(cs.velocity, delta)
 
         // --- Bowl Collision ---
-        // Equation of a bowl (approx paraboloid or sphere slice)
-        // Here using the same paraboloid approx from before
         const bowlRadiusAtHeight = BOWL_RADIUS * Math.sqrt(Math.max(0, 1 - Math.pow((BOWL_CENTER_Y - cs.position.y) / BOWL_DEPTH, 2)))
         const distFromCenter = Math.sqrt(cs.position.x ** 2 + cs.position.z ** 2)
 
         if (distFromCenter > bowlRadiusAtHeight - cs.radius && cs.position.y < BOWL_CENTER_Y) {
-            // Bounce off wall
             const angle = Math.atan2(cs.position.z, cs.position.x)
             const maxDist = bowlRadiusAtHeight - cs.radius
             cs.position.x = Math.cos(angle) * maxDist
             cs.position.z = Math.sin(angle) * maxDist
 
-            // Dampen and Reflect
             cs.velocity.x *= -BOUNCE_DAMPING
             cs.velocity.z *= -BOUNCE_DAMPING
             cs.velocity.y *= BOUNCE_DAMPING
@@ -96,37 +91,85 @@ function PhysicsCherry({ startPosition, delay, onSettle, activeCherries, index }
                 cs.velocity.set(0, 0, 0)
                 cs.settled = true
                 onSettle([cs.position.x, cs.position.y, cs.position.z])
+                return // Stop processing
             } else {
                 cs.velocity.y = Math.abs(cs.velocity.y) * BOUNCE_DAMPING
             }
         }
 
-        // --- Cherry-Cherry Collision (Optimized) ---
-        // Only check against other ACTIVE cherries. 
-        // We *ignoring* static cherries for collision to save perf? 
-        // Or we should pass static cherries too?
-        // User asked for perf improvement.
-        // Let's rely on "piling up" naturally. 
-        // If we ignore static cherries, new ones will fall THROUGH old ones. That looks bad.
-        // We need static cherry positions for collision.
-        // BUT checking 500 static cherries every frame is expensive (500 * N).
-        // Compromise: Use a simplified "floor height map" or just check?
-        // Let's try checking against active only first? No, must check static. 
+        // --- Static Collision (Saved Cherries) ---
+        // O(500) check per frame per dropping cherry. 500*10 = 5000 ops. Negligible.
+        for (let i = 0; i < staticPositions.length; i++) {
+            const sx = staticPositions[i][0]
+            const sy = staticPositions[i][1]
+            const sz = staticPositions[i][2]
 
-        // Fix: We won't check static collision in this simplified version to ensure 60fps.
-        // Instead, we rely on the fact that new cherries fall on TOP of where old ones *would* be?
-        // Actually, without collision against old pile, they will fall to bottom.
-        // We DO need to collide with them.
+            // Simple box check first for optimization
+            if (Math.abs(cs.position.x - sx) > 0.4 || Math.abs(cs.position.y - sy) > 0.4 || Math.abs(cs.position.z - sz) > 0.4) continue;
 
-        // Optimization: Only check collision if close to bottom?
-        // Let's rely on the user's "lag" comment.
-        // We will SKIP collision for now to ensure smoothness as proof of concept for "State Saving".
-        // If it looks bad (overlap), we can turn it on later.
+            const dx = cs.position.x - sx
+            const dy = cs.position.y - sy
+            const dz = cs.position.z - sz
+            const distSq = dx * dx + dy * dy + dz * dz
+            const minD = cs.radius + CHERRY_RADIUS // Radius of me + radius of static
 
+            if (distSq < minD * minD && distSq > 0.0001) {
+                const dist = Math.sqrt(distSq)
+                const overlap = minD - dist
+
+                // Normal
+                const nx = dx / dist
+                const ny = dy / dist
+                const nz = dz / dist
+
+                // Push out hard to resolve clipping
+                cs.position.x += nx * overlap
+                cs.position.y += ny * overlap
+                cs.position.z += nz * overlap
+
+                // Transfer momentum / Bounce
+                cs.velocity.multiplyScalar(0.5)
+                cs.velocity.add(new THREE.Vector3(nx, ny, nz).multiplyScalar(1))
+            }
+        }
+
+        // --- Active vs Active Collision ---
+        for (let i = 0; i < activeCherries.current.length; i++) {
+            if (i === index || !activeCherries.current[i]) continue
+            const other = activeCherries.current[i]
+            if (other.settled) continue // Treat settled actives as statics? No, they might not be in staticPositions yet.
+
+            const dx = cs.position.x - other.position.x
+            const dy = cs.position.y - other.position.y
+            const dz = cs.position.z - other.position.z
+            const distSq = dx * dx + dy * dy + dz * dz
+            const minD = cs.radius + other.radius
+
+            if (distSq < minD * minD && distSq > 0.0001) {
+                const dist = Math.sqrt(distSq)
+                const overlap = minD - dist
+                const nx = dx / dist; const ny = dy / dist; const nz = dz / dist
+
+                cs.position.x += nx * overlap * 0.5
+                cs.position.y += ny * overlap * 0.5
+                cs.position.z += nz * overlap * 0.5
+
+                cs.velocity.multiplyScalar(0.9)
+            }
+        }
+
+        // Velocity Cap check (Settling)
         const speed = cs.velocity.length()
-        if (speed < VELOCITY_THRESHOLD && cs.position.y <= bowlBottom + cs.radius + 0.5) {
-            cs.settled = true
-            onSettle([cs.position.x, cs.position.y, cs.position.z])
+        // Check if we are stuck on top of others
+        if (speed < VELOCITY_THRESHOLD && (cs.position.y <= bowlBottom + cs.radius + 0.5 || cs.velocity.y > -0.1)) {
+            // We might be resting on a static cherry.
+            // How to verify settling properly? 
+            // If low speed for significant time? 
+            // For now, if very slow, settle.
+            if (cs.position.y < BOWL_CENTER_Y && speed < 0.01) {
+                cs.settled = true
+                onSettle([cs.position.x, cs.position.y, cs.position.z])
+            }
         }
 
         meshRef.current.position.copy(cs.position)
@@ -153,113 +196,79 @@ function GreenBowl() {
 
 function PyramidScene({ visualCount }: { visualCount: number }) {
     // State for saved cherries (static)
-    const [savedPositions, setSavedPositions] = useState<[number, number, number][]>([]);
-    const [newDrops, setNewDrops] = useState<[number, number, number][]>([]);
+    // We strictly use 'initialSaved' for the static rendering to avoid re-rendering entire static list
+    // when 'savedPositions' updates via handleSettle.
+    // Wait, if we don't update the static list, the newly settled cherry disappears?
+    // Correct approach:
+    // 1. 'displayStatic' state initialized from LS.
+    // 2. onSettle adds to 'displayStatic'. (This acts as LS sync too).
+    // 3. 'dropsToRender' is calculated ONE TIME based on visualCount vs initial load.
 
-    // Mutable ref for ACTIVE physics cherries only
+    // Actually, simple is better.
+    const [savedPositions, setSavedPositions] = useState<[number, number, number][]>([]);
+    const [drops, setDrops] = useState<[number, number, number][]>([]);
+
     const activeCherries = useRef<CherryState[]>([])
 
-    // Load from LocalStorage on Mount
+    // 1. Initial Load
     useEffect(() => {
         try {
             const saved = localStorage.getItem("foundation_cherry_state_v1");
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed)) {
-                    setSavedPositions(parsed);
-                }
-            }
-        } catch (e) {
-            console.error("Failed to load cherry state", e);
-        }
-    }, []);
+            const parsed = saved ? JSON.parse(saved) : [];
+            setSavedPositions(parsed);
 
-    // Determine new drops when visualCount or savedPositions change
-    useEffect(() => {
-        // how many total should we have?
-        const totalNeeded = visualCount;
-        const currentSaved = savedPositions.length;
-        const needed = totalNeeded - currentSaved;
-
-        if (needed > 0) {
-            // Generate 'needed' new drop positions
-            const drops: [number, number, number][] = [];
+            // 2. Calculate Drops ONCE based on this load
+            // This prevents re-calc when savedPositions updates during dropping
+            const needed = Math.max(0, visualCount - parsed.length);
+            const newDrops: [number, number, number][] = [];
             for (let i = 0; i < needed; i++) {
-                const randomX = (Math.random() - 0.5) * 1.5;
-                const randomZ = (Math.random() - 0.5) * 1.5;
-                const randomHeight = Math.random() * 5 + 4; // Start high
-                drops.push([randomX, BOWL_CENTER_Y + randomHeight, randomZ]);
+                const rx = (Math.random() - 0.5) * 1.5;
+                const rz = (Math.random() - 0.5) * 1.5;
+                const rh = Math.random() * 6 + 4;
+                newDrops.push([rx, BOWL_CENTER_Y + rh, rz]);
             }
-            setNewDrops(drops);
-        } else {
-            setNewDrops([]);
+            setDrops(newDrops);
+
+        } catch (e) {
+            console.error("Failed load", e);
         }
-    }, [visualCount, savedPositions.length]);
+    }, [visualCount]); // Only run if target total changes (e.g. navigation or new points)
 
     const handleSettle = (finalPos: [number, number, number]) => {
-        // When a new cherry settles, add it to saved state
         setSavedPositions(prev => {
             const next = [...prev, finalPos];
-            // Side effect: Save to LS (debounced ideally, but here direct for safety)
             localStorage.setItem("foundation_cherry_state_v1", JSON.stringify(next));
             return next;
         });
-
-        // Ideally we remove it from 'active' list? 
-        // Currently PhysicsCherry unmounts? No, it stays rendered but static? 
-        // Actually, if we add to 'savedPositions', it will render as StaticCherry next render.
-        // We need to remove it from 'NewDrops' to avoid double render?
-        // This is tricky with React state.
-        // Simplification: We WON'T move it to savedPositions instanly to avoid re-renders during animation.
-        // We will just save to LS. 
-        // On NEXT reload, it will be static.
-        // Wait, if we don't move it to static, the user sees it fine.
-        // But if they leave and come back, it loads from LS.
-
-        // So:
-        // 1. Save to LS.
-        // 2. Keep it as PhysicsCherry (settled) for this session.
-
-        // To implement this safely:
-        // We read 'originalSavedLength' on mount.
-        // We render StaticCherry for indices 0 to originalSavedLength-1.
-        // We render PhysicsCherry for the rest.
-
-        // Let's adjust the State logic.
     }
 
-    // --- Refined Rendering Logic ---
-    // We strictly separate "Initially Saved" vs "New Session Drops"
-    const [initialSaved] = useState(() => {
-        if (typeof window !== "undefined") {
-            try {
-                const s = localStorage.getItem("foundation_cherry_state_v1");
-                return s ? JSON.parse(s) : [];
-            } catch { return []; }
-        }
-        return [];
-    });
+    // We only render drops that correspond to the 'drops' state.
+    // Once settled, they technically exist in 'savedPositions' AND 'drops' list (PhysicsCherry stays mounted but settled=true).
+    // This double rendering (Static at finalPos + Physics at finalPos) is bad.
+    // PhysicsCherry unmounts? No.
+    // 
+    // Fix: We must NOT add to 'savedPositions' state for rendering until next reload?
+    // OR PhysicsCherry should return null if settled?
+    // Let's make PhysicsCherry return null or stop rendering mesh if settled AND we rely on StaticCherry taking over.
+    // But StaticCherry only updates if 'savedPositions' updates.
+    // If 'savedPositions' updates, it triggers re-render of huge list. Rerendering 500 static meshes is cheap in React (virtual DOM diff)?
+    // Or we use <InstancedMesh>? For 500, individual meshes are fine.
 
-    // Calc how many new ones to drop
-    const dropsToRender = useMemo(() => {
-        const count = Math.max(0, visualCount - initialSaved.length);
-        const drops: [number, number, number][] = [];
-        for (let i = 0; i < count; i++) {
-            const rx = (Math.random() - 0.5) * 1.0;
-            const rz = (Math.random() - 0.5) * 1.0;
-            const rh = Math.random() * 6 + 4;
-            drops.push([rx, BOWL_CENTER_Y + rh, rz]);
-        }
-        return drops;
-    }, [visualCount, initialSaved.length]);
+    // User wants NO lag.
+    // Best UX:
+    // 1. Drops fall.
+    // 2. Settle -> Add to LS.
+    // 3. Do NOT add to 'savedPositions' state (Static list) immediately. Leave as PhysicsCherry (settled/sleeping).
+    // 4. Next Page Load -> They become Static.
 
-    // Save helper
-    const saveToStorage = (newPos: [number, number, number]) => {
+    // This avoids re-rendering the static list every time one settles.
+
+    // Modified handleSettle: Just save to LS.
+    const handleSettleOnlyLS = (finalPos: [number, number, number]) => {
         const current = localStorage.getItem("foundation_cherry_state_v1");
         const prev = current ? JSON.parse(current) : [];
-        // Prevent infinite growth if something is buggy, cap at 500
-        if (prev.length > 500) return;
-        prev.push(newPos);
+        if (prev.length > 500) return; // Cap
+        prev.push(finalPos);
         localStorage.setItem("foundation_cherry_state_v1", JSON.stringify(prev));
     };
 
@@ -271,19 +280,20 @@ function PyramidScene({ visualCount }: { visualCount: number }) {
 
             <GreenBowl />
 
-            {/* 1. Static Cherries (Saved from previous sessions) */}
-            {initialSaved.map((pos: any, i: number) => (
+            {/* Static Cherries (Only those loaded on mount) */}
+            {savedPositions.map((pos, i) => (
                 <StaticCherry key={`static-${i}`} position={pos} />
             ))}
 
-            {/* 2. New Falling Cherries */}
-            {dropsToRender.map((pos, i) => (
+            {/* Falling Cherries (Become "sleeping" physics bodies when settled) */}
+            {drops.map((pos, i) => (
                 <PhysicsCherry
                     key={`drop-${i}`}
                     startPosition={pos}
-                    delay={i * 50}
-                    onSettle={saveToStorage}
+                    delay={i * 100}
+                    onSettle={handleSettleOnlyLS}
                     activeCherries={activeCherries}
+                    staticPositions={savedPositions} // Collision against STATIC ONLY
                     index={i}
                 />
             ))}
@@ -295,7 +305,6 @@ function PyramidScene({ visualCount }: { visualCount: number }) {
 }
 
 export const CherryPyramid = React.memo(function CherryPyramid({ totalCherries }: { totalCherries: number }) {
-    // 1 cherry per 10 points
     const visualCount = Math.floor(totalCherries / 10);
     const safeCount = Math.min(visualCount, 500);
 
