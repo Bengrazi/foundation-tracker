@@ -84,7 +84,13 @@ export function HabitManager() {
 
     const handleDelete = async (id: string) => {
         if (!confirm("Delete this habit permanently?")) return;
+
+        // 1. Delete associated logs first (FK constraint safety)
+        await supabase.from("foundation_logs").delete().eq("foundation_id", id);
+
+        // 2. Delete the habit
         await supabase.from("foundations").delete().eq("id", id);
+
         loadHabits();
         if (editingId === id) setShowForm(false);
     };
@@ -114,12 +120,7 @@ export function HabitManager() {
         const h1 = newHabits[index];
         const h2 = newHabits[swapIndex];
 
-        await supabase.from("foundations").upsert([
-            { id: h1.id, order_index: index * 1000, title: h1.title, user_id: h1.user_id }, // Update required fields to satisfy RLS/constraints if needed, though update by ID usually fine.
-            // Actually upsert usually needs all NotNulls? Or just PK? Supabase helper handles partial usually but clean update is safer.
-            // Let's just update order_index.
-        ]);
-
+        // Use UPDATE instead of UPSERT to avoid needing all required fields
         await Promise.all([
             supabase.from("foundations").update({ order_index: index * 1000 }).eq("id", h1.id),
             supabase.from("foundations").update({ order_index: swapIndex * 1000 }).eq("id", h2.id)

@@ -185,21 +185,31 @@ export default function SettingsPage() {
         return;
       }
 
-      const results = await Promise.all([
-        supabase.from("foundation_logs").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-        supabase.from("foundations").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+      // Sequential Deletion to avoid Foreign Key constraints
+      // 1. Logs (depend on foundations)
+      await supabase.from("foundation_logs").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+
+      // 2. Foundations (parent of logs) - WAIT for logs to be deleted
+      await supabase.from("foundations").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+
+      // 3. Other independent tables
+      await Promise.all([
         supabase.from("reflections").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("goals").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("daily_intentions").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-        supabase.from("profiles").update({
-          priorities: null,
-          life_summary: null,
-          ideology: null,
-          key_truth: null,
-          ai_voice: null
-        }).eq("id", auth.user.id),
         supabase.from("board_members").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+        supabase.from("celebrations").delete().neq("id", "00000000-0000-0000-0000-000000000000"), // Clean up celebrations too
       ]);
+
+      // 4. Reset Profile
+      await supabase.from("profiles").update({
+        priorities: null,
+        life_summary: null,
+        ideology: null,
+        key_truth: null,
+        ai_voice: null,
+        points: 0 // Reset points too
+      }).eq("id", auth.user.id);
 
       // Clear local storage logic...
       window.localStorage.removeItem(ONBOARDING_KEY);
@@ -219,7 +229,11 @@ export default function SettingsPage() {
         refreshProfile()
       ]);
 
-      router.push("/foundation");
+      // Force reload to clear any in-memory state or cached data
+      window.location.href = "/foundation";
+    } catch (err) {
+      console.error("Reset failed:", err);
+      alert("Reset failed. Please try again.");
     } finally {
       setResetting(false);
     }
