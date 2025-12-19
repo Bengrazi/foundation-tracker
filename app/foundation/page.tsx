@@ -12,6 +12,9 @@ import { awardPoints, POINTS } from "@/lib/points";
 import { HabitBubble } from "@/components/HabitBubble";
 import { HabitManager } from "@/components/HabitManager";
 
+// --- Constants ---
+const GOLD_MILESTONES = [1, 3, 7, 14, 30, 50, 75, 100, 150, 200, 250, 300, 365, 500, 1000];
+
 // --- Types ---
 type FoundationLog = {
   id: string;
@@ -206,9 +209,14 @@ export default function FoundationPage() {
         });
 
         if (allDone && !isGoldComplete) {
-          setCelebrationMessage("Gold Streak Achieved! Discipline is destiny.");
-          setShowCelebration(true);
+          // Updated for Frequency Constraint
+          const nextStreak = currentGoldStreak + 1;
           setCurrentGoldStreak(prev => prev + 1);
+
+          if (GOLD_MILESTONES.includes(nextStreak)) {
+            setCelebrationMessage("Gold Streak Achieved! Discipline is destiny.");
+            setShowCelebration(true);
+          }
         }
       }
     } else {
@@ -240,11 +248,11 @@ export default function FoundationPage() {
 
       <main className="mx-auto max-w-md px-6 pt-6 relative">
         {/* Header Area */}
-        <header className="mb-4 text-center pt-8">
-          <p className="text-[10px] text-app-muted uppercase tracking-widest mb-2 font-semibold">
+        <header className="mb-2 text-center pt-4">
+          <p className="text-[0.65rem] text-app-muted uppercase tracking-widest mb-1 font-semibold">
             {format(parseISO(selectedDate), "EEEE, MMMM d")}
           </p>
-          <h1 className="text-xl md:text-2xl font-serif italic text-app-main leading-relaxed px-4 mb-6">
+          <h1 className="text-lg md:text-xl font-serif italic text-app-main leading-relaxed px-4 mb-4">
             &ldquo;{dailyIntention?.content || "Discipline is the bridge between goals and accomplishment."}&rdquo;
           </h1>
 
@@ -303,7 +311,7 @@ export default function FoundationPage() {
                 const streak = calculateStreak(foundation.id, historyLogs, format(new Date(), "yyyy-MM-dd"));
 
                 // Gold Status Check
-                const goldAll = isGoldComplete && isSameDay(parseISO(selectedDate), new Date());
+                const goldAll = isGoldComplete;
 
                 return (
                   <div key={foundation.id} className="w-full flex justify-center">

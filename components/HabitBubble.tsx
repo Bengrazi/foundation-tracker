@@ -130,7 +130,7 @@ export function HabitBubble({
             {/* Content */}
             <div className={`relative z-10 flex flex-col items-center justify-center p-3 text-center pointer-events-none select-none w-full h-full ${textColorClass}`}>
                 {/* Title */}
-                <span className="font-semibold leading-tight line-clamp-2 w-full break-words text-[10px] sm:text-xs">
+                <span className="font-semibold leading-tight line-clamp-2 w-full break-words text-[0.85em]">
                     {title}
                 </span>
 
@@ -138,15 +138,15 @@ export function HabitBubble({
                 <div className={`mt-1 flex items-center gap-0.5 transition-opacity ${completed ? "opacity-90" : "opacity-70"}`}>
                     {streak > 0 && (
                         <>
-                            <span className="text-[10px]">🔥</span>
-                            <span className="text-[10px] font-bold">{streak}</span>
+                            <span className="text-[0.8em]">🔥</span>
+                            <span className="text-[0.8em] font-bold">{streak}</span>
                         </>
                     )}
                 </div>
 
                 {/* Counter */}
                 {!completed && targetCount > 1 && (
-                    <div className="absolute bottom-2 text-[8px] opacity-60 font-mono">
+                    <div className="absolute bottom-2 text-[0.65em] opacity-60 font-mono">
                         {currentCount}/{targetCount}
                     </div>
                 )}

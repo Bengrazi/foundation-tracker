@@ -5,7 +5,7 @@ import { format, subDays } from "date-fns";
 import { useRouter } from "next/navigation";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
 import { supabase } from "@/lib/supabaseClient";
-import { applySavedTextSize, setTextSize, TextSize } from "@/lib/textSize";
+import { applySavedTextSize, setTextSize, TextSize, TEXT_SIZE_KEY } from "@/lib/textSize";
 import { applySavedTheme, setTheme, Theme } from "@/lib/theme";
 import { useGlobalState } from "@/components/GlobalStateProvider";
 
@@ -67,28 +67,33 @@ export default function SettingsPage() {
 
   const { userProfile, refreshPoints, refreshGoals, refreshIntention, refreshQuestion, refreshProfile } = useGlobalState();
 
+  // --- Sync State Logic ---
+  // Priority: LocalStorage (Current Device) > UserProfile (Cloud) > Default
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // 1. Apply styles globally
     applySavedTextSize();
     applySavedTheme();
 
-    if (typeof window !== "undefined") {
-      // Robust state sync
-      const savedTextSize = localStorage.getItem("foundation_ui_text_size_v1") as TextSize | null;
-      if (savedTextSize) {
-        setTextSizeState(savedTextSize);
-      } else {
-        const docSize = document.documentElement.dataset.textSize as TextSize;
-        if (docSize) setTextSizeState(docSize);
-      }
-
-      const savedTheme = localStorage.getItem("foundation_theme") as Theme | null;
-      if (savedTheme) setThemeState(savedTheme);
+    // 2. Determine Text Size State
+    const savedSize = localStorage.getItem(TEXT_SIZE_KEY) as TextSize | null;
+    if (savedSize) {
+      setTextSizeState(savedSize);
+    } else if (userProfile?.text_size) {
+      // Fallback: If no local setting, pull from cloud and save locally
+      setTextSize(userProfile.text_size as TextSize);
+      setTextSizeState(userProfile.text_size as TextSize);
     }
 
-    // Sync from Global State
-    if (userProfile) {
-      if (userProfile.theme) setThemeState(userProfile.theme as Theme);
-      if (userProfile.text_size) setTextSizeState(userProfile.text_size as TextSize);
+    // 3. Determine Theme State
+    const savedTheme = localStorage.getItem("foundation_theme") as Theme | null;
+    if (savedTheme) {
+      setThemeState(savedTheme);
+    } else if (userProfile?.theme) {
+      // Fallback: If no local setting, pull from cloud and save locally
+      setTheme(userProfile.theme as Theme);
+      setThemeState(userProfile.theme as Theme);
     }
   }, [userProfile]);
 
@@ -199,6 +204,7 @@ export default function SettingsPage() {
       // Clear local storage logic...
       window.localStorage.removeItem(ONBOARDING_KEY);
       window.localStorage.removeItem("foundation_first_gold_celebration_shown");
+      window.localStorage.removeItem("foundation_cherry_state_v1"); // Clear cherries
       Object.keys(window.localStorage).forEach(key => {
         if (key.startsWith("foundation_celebration_")) {
           window.localStorage.removeItem(key);
