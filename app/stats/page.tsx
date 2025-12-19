@@ -6,6 +6,7 @@ import { AuthGuardHeader } from "@/components/AuthGuardHeader";
 import { CherryPyramid } from "@/components/CherryPyramid";
 import { StatsGrid } from "@/components/StatsGrid";
 import { ChatWidget } from "@/components/ChatWidget";
+import { format, subDays, isSameDay } from "date-fns";
 
 export default function StatsPage() {
     const [stats, setStats] = useState({
@@ -29,38 +30,73 @@ export default function StatsPage() {
                 .eq("id", user.id)
                 .single();
 
-            // 2. Fetch Logs for Habits Count & Days Active
-            // This could be heavy, ideally we'd have summary tables, but for V1 we count.
-            const { count: habitsCount } = await supabase
+            // 2. Fetch Logs for Habits Count & Days Active & Gold Streak Calc
+            // We fetch the last 60 days of logs to calculate streak responsibly
+            const { data: logs } = await supabase
                 .from("foundation_logs")
-                .select("*", { count: "exact", head: true })
-                .eq("completed", true);
+                .select("date, foundation_id, completed")
+                .eq("user_id", user.id)
+                .order("date", { ascending: false });
 
-            // Days active: Count unique days in logs? Or use created_at of profile?
-            // Let's count unique days in logs where at least one habit was completed.
-            // Supabase doesn't do "COUNT(DISTINCT column)" easily via JS client without RPC.
-            // We'll estimate or plain fetch dates if not too many.
-            // For now, let's use a simpler proxy or just fetch generic logs.
-            // Actually, let's use the 'points_history' if available or just stick to habitsCount.
-            // Let's fetch the earliest log date.
+            const safeLogs = logs || [];
 
-            const { data: earliest } = await supabase
-                .from("foundation_logs")
-                .select("date")
-                .order("date", { ascending: true })
-                .limit(1)
-                .single();
+            // Calc Total Habits
+            const totalHabitsCompleted = safeLogs.filter(l => l.completed).length;
 
-            let daysActive = 0;
-            if (earliest) {
-                const start = new Date(earliest.date);
-                const now = new Date();
-                const diffTime = Math.abs(now.getTime() - start.getTime());
-                daysActive = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            // Calc Days Active (Unique dates with > 0 completion)
+            const uniqueDays = new Set(safeLogs.filter(l => l.completed).map(l => l.date));
+            const daysActive = uniqueDays.size;
+
+            // 3. Current Gold Streak Calculation
+            // Logic: Check yesterday, then day before... 
+            // A day is "Gold" if ALL scheduled habits were completed.
+            // But we need to know HOW MANY habits were scheduled per day.
+            // Assumption for MVP: If they have logs for a day, check if ALL logs for that day are completed.
+            // Wait, if they added a habit recently, old days might have fewer logs. 
+            // "All logs for that day" is a decent proxy for "All scheduled habits".
+
+            let streak = 0;
+            const logMap = new Map<string, typeof safeLogs>();
+            safeLogs.forEach(l => {
+                const dayLogs = logMap.get(l.date) || [];
+                dayLogs.push(l);
+                logMap.set(l.date, dayLogs);
+            });
+
+            // Iterate backwards from Yesterday (or Today if completed)
+            // Actually, gold streak includes today if today is done. 
+            const today = format(new Date(), "yyyy-MM-dd");
+            let checkDate = new Date();
+
+            // If today is NOT fully done, we start checking from yesterday.
+            // If today IS fully done, streak includes today.
+            // Let's check today first.
+
+            const isDayGold = (dateStr: string) => {
+                const daysLogs = logMap.get(dateStr);
+                if (!daysLogs || daysLogs.length === 0) return false; // No logs = break streak? Or skip? Usually break.
+                return daysLogs.every(l => l.completed);
+            };
+
+            // Recursively check
+            const check = (d: Date) => {
+                const dStr = format(d, "yyyy-MM-dd");
+                if (isDayGold(dStr)) {
+                    streak++;
+                    check(subDays(d, 1));
+                }
+            };
+
+            if (isDayGold(today)) {
+                // Today counts!
+                streak++;
+                check(subDays(checkDate, 1));
+            } else {
+                // Today not done (yet), start checking yesterday
+                check(subDays(checkDate, 1));
             }
 
-            // 3. Gold Streaks
-            // We can check the 'celebrations' table for 'gold_streak' types to find the max.
+            // 4. Max Gold Streak (from Celebrations table)
             const { data: maxGold } = await supabase
                 .from("celebrations")
                 .select("streak_days")
@@ -69,41 +105,17 @@ export default function StatsPage() {
                 .limit(1)
                 .maybeSingle();
 
-            // Current streak implies checking recent days. 
-            // For now, let's pull 'streak_days' from the latest celebration OR 0 if long ago.
-            // A precise calculation requires the same logic as FoundationPage.
-            // Let's assume 0 for MVP or fetch the precomputed value if we stored it?
-            // We don't store "current streak" permanently except in local storage or recompute.
-            // Let's rely on LocalStorage for "Current Gold Streak" as it's computed on the main page often?
-            // Or just recompute simplified version here?
-            // Let's use 0 as placeholder for now or try to read from a shared source if available.
-            // Actually, we can just query the last 'gold_streak' celebration date? No, celebrations only happen on milestones.
-
-            // Re-use logic? Hard to share without moving code.
-            // Let's default to standard fetch.
-
             setStats({
                 totalCherries: profile?.points || 0,
-                currentGoldStreak: 0, // Todo: accurate compute (expensive)
-                bestGoldStreak: maxGold?.streak_days || 0,
-                totalHabitsCompleted: habitsCount || 0,
-                daysActive: daysActive || 1
+                currentGoldStreak: streak,
+                bestGoldStreak: Math.max(streak, maxGold?.streak_days || 0),
+                totalHabitsCompleted,
+                daysActive: daysActive || 0
             });
             setLoading(false);
         };
 
         loadStats();
-    }, []);
-
-    // Hydrate current streak from localStorage if client-side
-    useEffect(() => {
-        // This is a rough hack to sync the "Current Gold Streak" calculated on the home page
-        // A better way is to store it in the DB profile or context.
-        const msg = localStorage.getItem("foundation_celebration_gold_streak_current");
-        if (msg) {
-            // If we stored it... but we didn't explicitly store "current streak" in LS in FoundationPage.
-            // We only stored "celebration_gold_DATE".
-        }
     }, []);
 
     return (
@@ -128,7 +140,6 @@ export default function StatsPage() {
                 <section className="mt-8">
                     <h2 className="text-sm font-semibold mb-2">Ask Foundation</h2>
                     <ChatWidget contextMode="allReflections" />
-                    {/* Re-using ChatWidget but ideally we customize the prompt slightly for stats context */}
                 </section>
             </main>
         </div>
