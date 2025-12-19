@@ -11,6 +11,7 @@ import { Foundation, Celebration } from "@/lib/engagementTypes";
 import { awardPoints, POINTS } from "@/lib/points";
 import { HabitBubble } from "@/components/HabitBubble";
 import { HabitManager } from "@/components/HabitManager";
+import { TEXT_SIZE_KEY, TextSize } from "@/lib/textSize";
 
 // --- Constants ---
 const GOLD_MILESTONES = [1, 3, 7, 14, 30, 50, 75, 100, 150, 200, 250, 300, 365, 500, 1000];
@@ -74,6 +75,9 @@ export default function FoundationPage() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState("");
 
+  // Layout State (Sync from LocalStorage for instant updates)
+  const [localTextSize, setLocalTextSize] = useState<TextSize>("small");
+
   // Streak State
   const [currentGoldStreak, setCurrentGoldStreak] = useState(0);
 
@@ -96,24 +100,35 @@ export default function FoundationPage() {
     }).sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
   }, [globalFoundations, selectedDate]);
 
-  // -- Text Size Logic --
+  // -- Text Size Logic (Prioritize LocalStorage) --
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(TEXT_SIZE_KEY) as TextSize | null;
+      if (saved) {
+        setLocalTextSize(saved);
+      } else if (userProfile?.text_size) {
+        setLocalTextSize(userProfile.text_size as TextSize);
+      }
+    }
+  }, [userProfile]); // Check on mount and if profile loads
+
   const textSizeClass = useMemo(() => {
-    const size = userProfile?.text_size || "small";
+    const size = localTextSize || "small";
     switch (size) {
       case "xl": return "text-lg"; // Bubbles text will inherit or scale relative
       case "large": return "text-base";
       case "medium": return "text-sm";
       default: return "text-xs";
     }
-  }, [userProfile]);
+  }, [localTextSize]);
 
   const gridClass = useMemo(() => {
-    const size = userProfile?.text_size || "small";
+    const size = localTextSize || "small";
     if (size === "large" || size === "xl") {
       return "grid-cols-2";
     }
     return "grid-cols-3";
-  }, [userProfile]);
+  }, [localTextSize]);
 
   // -- Logs & Streak --
   useEffect(() => {
