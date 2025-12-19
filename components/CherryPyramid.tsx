@@ -187,13 +187,15 @@ function PyramidScene({ totalCherries }: { totalCherries: number }) {
 
 // MEMOIZED Component to prevent re-drops on parent re-renders
 export const CherryPyramid = React.memo(function CherryPyramid({ totalCherries }: { totalCherries: number }) {
-    const safeCount = Math.min(totalCherries, 500);
+    // Feedback v5: 1 cherry per 10 points.
+    const visualCount = Math.floor(totalCherries / 10);
+    const safeCount = Math.min(visualCount, 500);
 
     return (
         <div className="w-full h-full bg-gradient-to-b from-sky-100 to-sky-50 rounded-3xl overflow-hidden relative">
-            {(totalCherries > safeCount) && (
+            {(totalCherries > 0) && (
                 <div className="absolute top-2 right-2 text-[10px] text-black/50 bg-white/50 px-2 rounded-full z-10">
-                    Showing 500/{totalCherries}
+                    {visualCount} Cherries ({totalCherries} pts)
                 </div>
             )}
             <Canvas shadows camera={{ position: [5, 5, 5], fov: 50 }} gl={{ antialias: true }}>

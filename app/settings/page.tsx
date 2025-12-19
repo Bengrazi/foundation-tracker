@@ -57,14 +57,6 @@ export default function SettingsPage() {
     return true;
   });
 
-  const [showJournal, setShowJournal] = useState(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("foundation_show_journal");
-      return saved !== null ? saved !== "false" : true;
-    }
-    return true;
-  });
-
   const [dailyAiQuestionEnabled, setDailyAiQuestionEnabled] = useState(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("foundation_daily_ai_question_enabled");
@@ -250,8 +242,6 @@ export default function SettingsPage() {
           <h1 className="text-lg font-semibold text-app-main">Settings</h1>
         </section>
 
-        {/* Removed Habit Manager Section per request */}
-
         {/* Appearance */}
         <section className="space-y-4 rounded-2xl bg-app-card p-4 ring-1 ring-app-border">
           <h2 className="text-sm font-semibold text-app-main">Appearance</h2>
@@ -322,26 +312,6 @@ export default function SettingsPage() {
                 type="checkbox"
                 checked={aiCoachEnabled}
                 onChange={(e) => handleAiCoachToggle(e.target.checked)}
-                className="peer sr-only"
-              />
-              <div className="peer h-5 w-9 rounded-full bg-app-card-hover ring-1 ring-app-border after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-app-accent peer-checked:after:translate-x-full"></div>
-            </label>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-medium text-app-main">Show Journal</div>
-              <div className="text-[10px] text-app-muted">Daily reflections and notes</div>
-            </div>
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input
-                type="checkbox"
-                checked={showJournal}
-                onChange={(e) => {
-                  const val = e.target.checked;
-                  setShowJournal(val);
-                  localStorage.setItem("foundation_show_journal", String(val));
-                  window.location.reload();
-                }}
                 className="peer sr-only"
               />
               <div className="peer h-5 w-9 rounded-full bg-app-card-hover ring-1 ring-app-border after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-app-accent peer-checked:after:translate-x-full"></div>

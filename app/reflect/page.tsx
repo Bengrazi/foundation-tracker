@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
-import { ChatWidget } from "@/components/ChatWidget";
 import { applySavedTextSize } from "@/lib/textSize";
 import { DailyAIQuestion } from "@/components/DailyAIQuestion";
 import { awardPoints, POINTS } from "@/lib/points";
@@ -291,10 +290,6 @@ export default function ReflectPage() {
             </button>
           </section>
         )}
-
-        <div className="mt-6">
-          <ChatWidget />
-        </div>
       </main>
     </div>
   );

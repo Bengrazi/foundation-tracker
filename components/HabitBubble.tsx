@@ -69,10 +69,6 @@ export function HabitBubble({
     if (isGoldState) {
         textColorClass = "text-white";
     } else if (completed) {
-        // When completed, we fill the bubble with accent color.
-        // So we need text that contrasts with accent color.
-        // Usually white for dark accents, or dark for light accents.
-        // We use the CSS variable for accent text color.
         textColorClass = "text-app-accent-text";
     }
 
@@ -115,7 +111,9 @@ export function HabitBubble({
                             key={`fill-${seg.index}`}
                             cx="50" cy="50" r={R}
                             fill="none"
-                            stroke={completed ? "transparent" : "var(--accent-color)"} // Hide stroke if solid fill? Actually lets keep text legible. If solid fill, we don't need ring.
+                            // Using text-app-accent via class to ensure we pick up the theme variable
+                            className={seg.isFilled ? "text-app-accent" : "text-transparent"}
+                            stroke="currentColor"
                             strokeWidth="8"
                             strokeLinecap={targetCount > 1 ? "round" : "butt"}
                             strokeDasharray={`${strokeLength} ${C - strokeLength}`}
