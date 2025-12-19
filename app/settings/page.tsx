@@ -198,7 +198,8 @@ export default function SettingsPage() {
         supabase.from("goals").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("daily_intentions").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
         supabase.from("board_members").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-        supabase.from("celebrations").delete().neq("id", "00000000-0000-0000-0000-000000000000"), // Clean up celebrations too
+        supabase.from("celebrations").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+        supabase.from("points_history").delete().neq("id", "00000000-0000-0000-0000-000000000000"), // Clean up points history
       ]);
 
       // 4. Reset Profile

@@ -15,6 +15,7 @@ import { TEXT_SIZE_KEY, TextSize } from "@/lib/textSize";
 
 // --- Constants ---
 const GOLD_MILESTONES = [1, 3, 7, 14, 30, 50, 75, 100, 150, 200, 250, 300, 365, 500, 1000];
+const ONBOARDING_KEY = "foundation_onboarding_done_v1";
 
 // --- Types ---
 type FoundationLog = {
@@ -65,6 +66,7 @@ export default function FoundationPage() {
     dailyIntention,
     refreshFoundations,
     refreshPoints,
+    refreshGoals,
     userProfile
   } = useGlobalState();
 
@@ -84,6 +86,14 @@ export default function FoundationPage() {
   // Edit Mode
   const [isEditing, setIsEditing] = useState(false);
 
+  // Onboarding State
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [priorities, setPriorities] = useState("");
+  const [lifeSummary, setLifeSummary] = useState("");
+  const [ideology, setIdeology] = useState("");
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
+
   // -- Computed Foundations --
   const todaysFoundations = useMemo(() => {
     return globalFoundations.filter(f => {
@@ -99,6 +109,16 @@ export default function FoundationPage() {
       return true;
     }).sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
   }, [globalFoundations, selectedDate]);
+
+  // -- Onboarding Check --
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const done = localStorage.getItem(ONBOARDING_KEY);
+      if (!done) {
+        setShowOnboarding(true);
+      }
+    }
+  }, []);
 
   // -- Text Size Logic (Prioritize LocalStorage) --
   useEffect(() => {
@@ -250,6 +270,75 @@ export default function FoundationPage() {
     }
   };
 
+  // -- Onboarding Submit Handler --
+  const handleOnboardingSubmit = async () => {
+    if (!priorities.trim() || !lifeSummary.trim()) {
+      alert("Please fill in at least your priorities and life vision.");
+      return;
+    }
+
+    setOnboardingLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Call onboarding API
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/onboarding", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ priorities, lifeSummary, ideology }),
+      });
+
+      const data = await res.json();
+
+      // Save to profile
+      await supabase.from("profiles").update({
+        priorities,
+        life_summary: lifeSummary,
+        ideology,
+        key_truth: data.keyTruth || null,
+        ai_voice: data.aiVoice || null,
+      }).eq("id", user.id);
+
+      // Save goals if any
+      if (data.goals) {
+        const horizons = ["3y", "1y", "6m", "1m"] as const;
+        for (const h of horizons) {
+          const goalsForHorizon = data.goals[h] || [];
+          for (let i = 0; i < goalsForHorizon.length; i++) {
+            const g = goalsForHorizon[i];
+            await supabase.from("goals").insert({
+              user_id: user.id,
+              title: g.title,
+              horizon: h,
+              status: "not_started",
+              target_date: format(new Date(), "yyyy-MM-dd"),
+              order_index: i * 1000,
+            });
+          }
+        }
+      }
+
+      // Mark onboarding as done
+      localStorage.setItem(ONBOARDING_KEY, "true");
+      setShowOnboarding(false);
+
+      // Refresh data
+      await refreshFoundations();
+      await refreshPoints();
+      await refreshGoals();
+    } catch (e) {
+      console.error("Onboarding failed:", e);
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setOnboardingLoading(false);
+    }
+  };
+
   return (
     <div className={`min-h-screen bg-app-main text-app-main pb-24 transition-colors duration-500 ${textSizeClass}`}>
       <AuthGuardHeader />
@@ -259,6 +348,76 @@ export default function FoundationPage() {
           message={celebrationMessage}
           onClose={() => setShowCelebration(false)}
         />
+      )}
+
+      {/* Onboarding Modal */}
+      {showOnboarding && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-6 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="w-full max-w-md bg-app-card rounded-3xl p-6 shadow-2xl border border-app-border space-y-6 max-h-[90vh] overflow-y-auto">
+            <div className="text-center">
+              <h2 className="text-xl font-bold text-app-main">Welcome to Cherry 🍒</h2>
+              <p className="mt-2 text-sm text-app-muted">
+                Let&apos;s personalize your experience. Answer a few questions to get started.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-app-main mb-1">
+                  What are your top priorities in life right now?
+                </label>
+                <textarea
+                  value={priorities}
+                  onChange={(e) => setPriorities(e.target.value)}
+                  placeholder="e.g., Building my startup, health, relationships..."
+                  className="w-full min-h-[80px] rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-main placeholder:text-app-muted/50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-app-main mb-1">
+                  Describe your life today and where you want to be in 10 years.
+                </label>
+                <textarea
+                  value={lifeSummary}
+                  onChange={(e) => setLifeSummary(e.target.value)}
+                  placeholder="e.g., I'm a software engineer working on my side project. In 10 years, I want to run a profitable SaaS..."
+                  className="w-full min-h-[100px] rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-main placeholder:text-app-muted/50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-app-main mb-1">
+                  Your worldview or guiding philosophy (optional)
+                </label>
+                <textarea
+                  value={ideology}
+                  onChange={(e) => setIdeology(e.target.value)}
+                  placeholder="e.g., Stoicism, pragmatic optimism, long-term thinking..."
+                  className="w-full min-h-[60px] rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-main placeholder:text-app-muted/50"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleOnboardingSubmit}
+              disabled={onboardingLoading}
+              className="w-full rounded-full bg-app-accent py-3 text-sm font-bold text-app-accent-text hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {onboardingLoading ? "Setting up..." : "Get Started"}
+            </button>
+
+            <button
+              onClick={() => {
+                localStorage.setItem(ONBOARDING_KEY, "true");
+                setShowOnboarding(false);
+              }}
+              className="w-full text-xs text-app-muted hover:text-app-main transition-colors"
+            >
+              Skip for now
+            </button>
+          </div>
+        </div>
       )}
 
       <main className="mx-auto max-w-md px-6 pt-6 relative">
