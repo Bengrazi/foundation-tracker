@@ -88,9 +88,7 @@ export default function FoundationPage() {
 
   // Onboarding State
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [onboardingStep, setOnboardingStep] = useState(0);
   const [priorities, setPriorities] = useState("");
-  const [lifeSummary, setLifeSummary] = useState("");
   const [ideology, setIdeology] = useState("");
   const [onboardingLoading, setOnboardingLoading] = useState(false);
 
@@ -272,8 +270,8 @@ export default function FoundationPage() {
 
   // -- Onboarding Submit Handler --
   const handleOnboardingSubmit = async () => {
-    if (!priorities.trim() || !lifeSummary.trim()) {
-      alert("Please fill in at least your priorities and life vision.");
+    if (!priorities.trim()) {
+      alert("Please fill in your priorities.");
       return;
     }
 
@@ -290,7 +288,7 @@ export default function FoundationPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session?.access_token}`,
         },
-        body: JSON.stringify({ priorities, lifeSummary, ideology }),
+        body: JSON.stringify({ priorities, lifeSummary: "", ideology }),
       });
 
       const data = await res.json();
@@ -298,7 +296,7 @@ export default function FoundationPage() {
       // Save to profile
       await supabase.from("profiles").update({
         priorities,
-        life_summary: lifeSummary,
+        life_summary: null,
         ideology,
         key_truth: data.keyTruth || null,
         ai_voice: data.aiVoice || null,
@@ -371,18 +369,6 @@ export default function FoundationPage() {
                   onChange={(e) => setPriorities(e.target.value)}
                   placeholder="e.g., Building my startup, health, relationships..."
                   className="w-full min-h-[80px] rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-main placeholder:text-app-muted/50"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-app-main mb-1">
-                  Describe your life today and where you want to be in 10 years.
-                </label>
-                <textarea
-                  value={lifeSummary}
-                  onChange={(e) => setLifeSummary(e.target.value)}
-                  placeholder="e.g., I'm a software engineer working on my side project. In 10 years, I want to run a profitable SaaS..."
-                  className="w-full min-h-[100px] rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-main placeholder:text-app-muted/50"
                 />
               </div>
 
