@@ -3,10 +3,12 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Foundation } from "@/lib/engagementTypes";
+import { useGlobalState } from "./GlobalStateProvider";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function HabitManager() {
+    const { refreshFoundations } = useGlobalState();
     const [habits, setHabits] = useState<Foundation[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -80,6 +82,7 @@ export function HabitManager() {
 
         setShowForm(false);
         loadHabits();
+        refreshFoundations(); // Update global state so habit appears immediately
     };
 
     const handleDelete = async (id: string) => {
@@ -92,6 +95,7 @@ export function HabitManager() {
         await supabase.from("foundations").delete().eq("id", id);
 
         loadHabits();
+        refreshFoundations(); // Update global state
         if (editingId === id) setShowForm(false);
     };
 

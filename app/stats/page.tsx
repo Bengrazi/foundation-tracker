@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
-import { CherryPyramid } from "@/components/CherryPyramid";
 import { StatsGrid } from "@/components/StatsGrid";
 import { ChatWidget } from "@/components/ChatWidget";
 
@@ -74,7 +73,7 @@ export default function StatsPage() {
                 currentGoldStreak: latestGold?.streak_days || 0,
                 bestGoldStreak: maxGold?.streak_days || 0,
                 totalHabitsCompleted,
-                daysActive: daysActive || 1 // Default to 1 if new
+                daysActive: daysActive || 0
             });
             setLoading(false);
         };
@@ -92,9 +91,33 @@ export default function StatsPage() {
                     <p className="text-xs text-app-muted">Your disciplined growth, visualized.</p>
                 </header>
 
-                {/* Hero: Pyramid */}
-                <section className="h-[350px] mb-6 shadow-2xl shadow-black/20 rounded-3xl">
-                    <CherryPyramid totalCherries={stats.totalCherries} />
+                {/* Hero: Total Cherries */}
+                <section className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-rose-500 via-red-500 to-red-600 p-6 shadow-2xl shadow-red-500/30">
+                    {/* Decorative Background Cherries */}
+                    <div className="absolute inset-0 pointer-events-none select-none overflow-hidden opacity-20">
+                        <span className="absolute text-6xl -top-2 -left-2 rotate-12">🍒</span>
+                        <span className="absolute text-5xl top-4 right-8 -rotate-12">🍒</span>
+                        <span className="absolute text-4xl bottom-2 left-12 rotate-45">🍒</span>
+                        <span className="absolute text-7xl -bottom-4 -right-4 -rotate-6">🍒</span>
+                        <span className="absolute text-3xl top-1/2 left-1/4 rotate-12">🍒</span>
+                        <span className="absolute text-4xl top-8 left-1/2 -rotate-45">🍒</span>
+                    </div>
+
+                    {/* Content */}
+                    <div className="relative z-10 text-center">
+                        <p className="text-xs uppercase tracking-widest text-white/80 font-semibold mb-2">
+                            Total Cherries Earned
+                        </p>
+                        <div className="flex items-center justify-center gap-3">
+                            <span className="text-5xl">🍒</span>
+                            <span className="text-5xl md:text-6xl font-black text-white tracking-tight">
+                                {stats.totalCherries.toLocaleString()}
+                            </span>
+                        </div>
+                        <p className="mt-3 text-sm text-white/70">
+                            Keep earning cherries by completing habits!
+                        </p>
+                    </div>
                 </section>
 
                 {/* Grid */}
