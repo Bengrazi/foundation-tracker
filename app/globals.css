@@ -19,7 +19,7 @@
     /* slate-50 */
     --text-muted: #94a3b8;
     /* slate-400 */
-    --border: #1e293b;
+    --border: #10b981;
     /* slate-800 */
     --accent: #10b981;
     /* emerald-500 */
@@ -47,7 +47,7 @@
     /* slate-900 */
     --text-muted: #64748b;
     /* slate-500 */
-    --border: #dcdcd9;
+    --border: #334155;
     /* slate-300 */
     --accent: #0f172a;
     /* slate-900 */
@@ -73,7 +73,7 @@
     /* orange-950 */
     --text-muted: #9a3412;
     /* orange-700 */
-    --border: #fdba74;
+    --border: #ea580c;
     /* orange-300 */
     --accent: #f97316;
     /* orange-500 */
@@ -100,7 +100,7 @@
     /* teal-ish for contrast or keep red */
     --text-muted: #9f1239;
     /* darker red for muted text */
-    --border: #fca5a5;
+    --border: #be123c;
     /* red-200 */
     --accent: #e11d48;
     /* rose-600 */
@@ -123,7 +123,7 @@
     /* rose-100 */
     --text-muted: #fda4af;
     /* rose-300 */
-    --border: #4c0519;
+    --border: #be123c;
     /* rose-950 */
     --accent: #e11d48;
     /* rose-600 (Cherry) */
