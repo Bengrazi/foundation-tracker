@@ -29,7 +29,7 @@ export default function StatsPage() {
             // 1. Fetch Profile (Cherries)
             const { data: profile } = await supabase
                 .from("profiles")
-                .select("points")
+                .select("*")
                 .eq("id", user.id)
                 .single();
 
