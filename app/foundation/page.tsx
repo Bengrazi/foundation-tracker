@@ -67,6 +67,7 @@ export default function FoundationPage() {
     refreshFoundations,
     refreshPoints,
     refreshGoals,
+    refreshProfile,
     userProfile
   } = useGlobalState();
 
@@ -169,18 +170,28 @@ export default function FoundationPage() {
         .gte("date", startHistoryParams)
         .eq("completed", true);
 
-      const { data: streakData } = await supabase
-        .from("celebrations")
-        .select("streak_days")
-        .eq("type", "gold_streak")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
       if (!cancelled) {
         if (todayData) setTodaysLogs(todayData as FoundationLog[]);
         if (histData) setHistoryLogs(histData as FoundationLog[]);
-        if (streakData) setCurrentGoldStreak(streakData.streak_days);
+
+        // Load Streak from Profile
+        const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+        if (profile) {
+          const todayStr = format(new Date(), "yyyy-MM-dd");
+          const yesterdayStr = format(subDays(new Date(), 1), "yyyy-MM-dd");
+
+          // Check if broken
+          let streak = profile.current_gold_streak || 0;
+          const lastDate = profile.last_gold_date;
+
+          // If last completed date is not today AND not yesterday, streak is broken -> 0
+          // Unless streak is 0, in which case it stays 0
+          if (streak > 0 && lastDate !== todayStr && lastDate !== yesterdayStr) {
+            streak = 0;
+            // We could update DB here to reset 0, but UI display is enough for now
+          }
+          setCurrentGoldStreak(streak);
+        }
         setLoadingLogs(false);
       }
     };
@@ -241,12 +252,32 @@ export default function FoundationPage() {
           return cnt >= req;
         });
 
+        // Updated Gold Streak with Persistence Logic
         if (allDone && !isGoldComplete) {
-          // Updated for Frequency Constraint
-          const nextStreak = currentGoldStreak + 1;
-          setCurrentGoldStreak(prev => prev + 1);
+          const todayStr = format(new Date(), "yyyy-MM-dd");
 
-          if (GOLD_MILESTONES.includes(nextStreak)) {
+          // Optimistic update
+          let newStreak = (userProfile?.current_gold_streak || 0) + 1;
+
+          // Redundant safety check: if already recorded today, don't double count
+          if (userProfile?.last_gold_date === todayStr) {
+            newStreak = userProfile.current_gold_streak || 0;
+          }
+
+          setCurrentGoldStreak(newStreak);
+
+          // Update DB
+          await supabase.from("profiles").update({
+            current_gold_streak: newStreak,
+            last_gold_date: todayStr,
+            best_gold_streak: Math.max(newStreak, userProfile?.best_gold_streak || 0)
+          }).eq("id", user.id);
+
+          // Refresh global state
+          await refreshProfile();
+
+          // Milestone Celebration
+          if (GOLD_MILESTONES.includes(newStreak)) {
             setCelebrationMessage("Gold Streak Achieved! Discipline is destiny.");
             setShowCelebration(true);
           }

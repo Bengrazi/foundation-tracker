@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { motion } from "framer-motion";
 
 const allTabs = [
   { label: "Foundation", href: "/foundation" },
@@ -31,11 +32,18 @@ export default function BottomNav() {
               <Link
                 key={tab.href}
                 href={tab.href}
-                className={`${isSettings ? "flex-none w-8 flex items-center justify-center" : "flex-1"} rounded-full px-2 py-1 text-center transition flex items-center justify-center ${active
-                  ? "bg-app-accent text-app-accent-text font-semibold"
+                className={`${isSettings ? "flex-none w-8 flex items-center justify-center" : "flex-1"} relative rounded-full px-2 py-1 text-center transition flex items-center justify-center z-10 ${active
+                  ? "text-app-accent-text font-semibold"
                   : "text-app-muted hover:text-app-main"
                   }`}
               >
+                {active && (
+                  <motion.div
+                    layoutId="activeTab"
+                    className="absolute inset-0 bg-app-accent rounded-full -z-10"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
                 {isSettings ? (
                   <svg
                     xmlns="http://www.w3.org/2000/svg"

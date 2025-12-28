@@ -85,7 +85,8 @@ export function HabitBubble({
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
-            whileTap={{ scale: 0.95 }}
+            whileTap={{ scale: 0.92, rotate: -2 }}
+            transition={{ type: "spring", stiffness: 400, damping: 15 }}
         >
             {/* SVG Progress Ring */}
             {!isGoldState && (
@@ -98,7 +99,7 @@ export function HabitBubble({
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="8"
-                            strokeOpacity="0.1" // Faint track
+                            strokeOpacity="0.1"
                             strokeDasharray={`${strokeLength} ${C - strokeLength}`}
                             strokeDashoffset={0}
                             transform={`rotate(${seg.rotation} 50 50)`}
@@ -111,7 +112,6 @@ export function HabitBubble({
                             key={`fill-${seg.index}`}
                             cx="50" cy="50" r={R}
                             fill="none"
-                            // Using text-app-accent via class to ensure we pick up the theme variable
                             className={seg.isFilled ? "text-app-accent" : "text-transparent"}
                             stroke="currentColor"
                             strokeWidth="8"
@@ -119,9 +119,9 @@ export function HabitBubble({
                             strokeDasharray={`${strokeLength} ${C - strokeLength}`}
                             strokeDashoffset={0}
                             transform={`rotate(${seg.rotation} 50 50)`}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: seg.isFilled ? 1 : 0 }}
-                            transition={{ duration: 0.3 }}
+                            initial={{ pathLength: 0, opacity: 0 }}
+                            animate={{ pathLength: seg.isFilled ? 1 : 0, opacity: seg.isFilled ? 1 : 0 }}
+                            transition={{ duration: 0.5, ease: "backOut" }}
                         />
                     ))}
                 </svg>
@@ -137,10 +137,14 @@ export function HabitBubble({
                 {/* Streak */}
                 <div className={`mt-1 flex items-center gap-0.5 transition-opacity ${completed ? "opacity-90" : "opacity-70"}`}>
                     {streak > 0 && (
-                        <>
+                        <motion.div
+                            initial={{ scale: 0.8 }}
+                            animate={{ scale: 1 }}
+                            className="flex items-center gap-0.5"
+                        >
                             <span className="text-[0.8em]">🔥</span>
                             <span className="text-[0.8em] font-bold">{streak}</span>
-                        </>
+                        </motion.div>
                     )}
                 </div>
 
@@ -153,9 +157,13 @@ export function HabitBubble({
 
                 {/* Checkmark */}
                 {completed && !isGoldState && (
-                    <div className="absolute inset-0 flex items-center justify-center opacity-20">
+                    <motion.div
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 0.2 }}
+                        className="absolute inset-0 flex items-center justify-center"
+                    >
                         <span className="text-4xl font-bold">✓</span>
-                    </div>
+                    </motion.div>
                 )}
             </div>
         </motion.button>

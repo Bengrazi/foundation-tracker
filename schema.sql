@@ -136,6 +136,11 @@ ALTER TABLE public.foundations ADD COLUMN IF NOT EXISTS times_per_day int DEFAUL
 -- Ensure profiles has points (total_cherries)
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS points int DEFAULT 0;
 
+-- Streak Tracking Columns
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS current_gold_streak int DEFAULT 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_gold_date text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS best_gold_streak int DEFAULT 0;
+
 -- ============================================
 -- 4. ENABLE ROW LEVEL SECURITY
 -- ============================================
@@ -334,6 +339,11 @@ CREATE POLICY "Users can update their own celebrations"
   ON public.celebrations FOR UPDATE TO authenticated
   USING ((SELECT auth.uid()) = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own celebrations" ON public.celebrations;
+CREATE POLICY "Users can delete their own celebrations"
+  ON public.celebrations FOR DELETE TO authenticated
+  USING ((SELECT auth.uid()) = user_id);
+
 -- POINTS HISTORY
 DROP POLICY IF EXISTS "Users can view their own points history" ON public.points_history;
 CREATE POLICY "Users can view their own points history"
@@ -344,6 +354,11 @@ DROP POLICY IF EXISTS "Users can insert their own points history" ON public.poin
 CREATE POLICY "Users can insert their own points history"
   ON public.points_history FOR INSERT TO authenticated
   WITH CHECK ((SELECT auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "Users can delete their own points history" ON public.points_history;
+CREATE POLICY "Users can delete their own points history"
+  ON public.points_history FOR DELETE TO authenticated
+  USING ((SELECT auth.uid()) = user_id);
 
 -- ============================================
 -- 6. FUNCTIONS (RPCs)

@@ -51,27 +51,23 @@ export default function StatsPage() {
             const uniqueDays = new Set(completedLogs.map(l => l.date));
             const daysActive = uniqueDays.size;
 
-            // 3. Gold Streak Data
-            const { data: latestGold } = await supabase
-                .from("celebrations")
-                .select("streak_days")
-                .eq("type", "gold_streak")
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
+            // 3. Gold Streak Data (New: from Profile)
+            // Check if streak is broken logic
+            const todayStr = new Date().toISOString().split('T')[0];
+            const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
-            const { data: maxGold } = await supabase
-                .from("celebrations")
-                .select("streak_days")
-                .eq("type", "gold_streak")
-                .order("streak_days", { ascending: false })
-                .limit(1)
-                .maybeSingle();
+            let currentStreak = profile?.current_gold_streak || 0;
+            const lastDate = profile?.last_gold_date;
+
+            // If last completed date is neither today nor yesterday, streak is broken
+            if (currentStreak > 0 && lastDate !== todayStr && lastDate !== yesterdayStr) {
+                currentStreak = 0;
+            }
 
             setStats({
                 totalCherries: profile?.points || 0,
-                currentGoldStreak: latestGold?.streak_days || 0,
-                bestGoldStreak: maxGold?.streak_days || 0,
+                currentGoldStreak: currentStreak,
+                bestGoldStreak: profile?.best_gold_streak || 0,
                 totalHabitsCompleted,
                 daysActive: daysActive || 0
             });

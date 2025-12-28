@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import { Foundation } from "@/lib/engagementTypes";
 import { useGlobalState } from "./GlobalStateProvider";
@@ -67,7 +68,7 @@ export function HabitManager() {
             times_per_day: times,
             // defaults
             schedule_type: "daily", // legacy fallback
-            start_date: new Date().toISOString().split('T')[0],
+            start_date: format(new Date(), "yyyy-MM-dd"),
         };
 
         if (editingId) {

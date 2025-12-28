@@ -53,4 +53,7 @@ export interface UserProfile {
     points: number;
     priorities: string | null;
     life_summary: string | null;
+    current_gold_streak?: number;
+    last_gold_date?: string;
+    best_gold_streak?: number;
 }
