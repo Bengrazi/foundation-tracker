@@ -48,11 +48,11 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-app-main text-app-main flex items-center justify-center px-4 transition-colors duration-300">
       <div className="w-full max-w-sm rounded-3xl border border-app-border bg-app-card p-6 shadow-xl shadow-black/40">
-        <h1 className="text-xl font-semibold text-app-main mb-1">CHERRY</h1>
+        <h1 className="text-xl font-semibold text-app-main mb-1">FOUNDATION</h1>
         <p className="mb-6 text-xs text-app-muted">
           {isSignUp
-            ? "Create an account to start your journey."
-            : "Sign in to track your habits, reflections, and goals."}
+            ? "Create an account to build your foundation."
+            : "Sign in to track your discipline."}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">

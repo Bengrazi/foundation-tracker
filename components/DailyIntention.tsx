@@ -25,7 +25,7 @@ export function DailyIntention({ intention, locked, onUpdate, onLock }: DailyInt
     };
 
     return (
-        <div className="w-full max-w-md mx-auto mb-6 px-4">
+        <div className="w-full max-w-md mx-auto mb-2 px-4">
             <div className="relative group">
                 {isEditing ? (
                     <div className="relative">

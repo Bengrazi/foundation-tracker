@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ChatWidget } from "@/components/ChatWidget";
 import { format, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthGuardHeader } from "@/components/AuthGuardHeader";
@@ -290,6 +291,12 @@ export default function ReflectPage() {
             </button>
           </section>
         )}
+
+        {/* AI Query */}
+        <section className="mt-8 border-t border-app-border/30 pt-8">
+          <h2 className="text-sm font-semibold mb-4 text-app-muted">Consult the Archives</h2>
+          <ChatWidget contextMode="allReflections" />
+        </section>
       </main>
     </div>
   );

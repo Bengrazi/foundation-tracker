@@ -485,8 +485,8 @@ export default function FoundationPage() {
 
       <main className="mx-auto max-w-md px-6 pt-6 relative">
         {/* Header Area */}
-        <header className="mb-2 text-center pt-4">
-          <p className="text-[0.65rem] text-app-muted uppercase tracking-widest mb-4 font-semibold">
+        <header className="mb-2 text-center pt-2">
+          <p className="text-[0.65rem] text-app-muted uppercase tracking-widest mb-2 font-semibold">
             {format(parseISO(selectedDate), "EEEE, MMMM d")}
           </p>
 
@@ -499,16 +499,23 @@ export default function FoundationPage() {
 
           <GoldStreakCounter count={currentGoldStreak} />
 
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center items-center gap-3 mb-4">
             <button
               onClick={() => setIsEditing(!isEditing)}
-              className={`text-xs px-4 py-2 rounded-full border transition-colors ${isEditing
+              className={`text-xs px-4 py-1.5 rounded-full border transition-colors ${isEditing
                 ? "bg-app-accent text-app-accent-text border-app-accent"
                 : "border-app-border text-app-muted hover:text-app-main"
                 }`}
             >
-              {isEditing ? "Done Editing" : "Manage Routine"}
+              {isEditing ? "Done" : "Manage"}
             </button>
+
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-app-card border border-app-border rounded-full px-4 py-1.5 text-xs text-app-muted focus:text-app-main focus:outline-none"
+            />
           </div>
         </header>
 
@@ -526,15 +533,7 @@ export default function FoundationPage() {
           </div>
         ) : (
           <>
-            {/* Date Nav */}
-            <div className="flex justify-center mb-8">
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-app-card border border-app-border rounded-full px-4 py-1 text-xs text-app-muted focus:text-app-main focus:outline-none"
-              />
-            </div>
+            {/* Habit Grid starts here directly */}
 
             {/* Habit Grid */}
             <section className={`grid gap-6 place-items-center ${gridClass}`}>

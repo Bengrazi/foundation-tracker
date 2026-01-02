@@ -87,23 +87,17 @@ export default function StatsPage() {
                     <p className="text-xs text-app-muted uppercase tracking-widest mt-1">Proof of Work</p>
                 </header>
 
-                {/* Badge Wall */}
-                <section className="mb-12">
-                    <BadgeWall badges={badges} userBadges={userBadges} />
-                </section>
-
                 {/* Secondary Stats */}
-                <section className="mb-12">
+                <section className="mb-8">
                     <h2 className="text-sm font-bold text-app-muted uppercase tracking-widest text-center mb-4">
                         Lifetime Stats
                     </h2>
                     <StatsGrid stats={stats} />
                 </section>
 
-                {/* AI Query */}
-                <section className="mt-8 border-t border-app-border/30 pt-8">
-                    <h2 className="text-sm font-semibold mb-4 text-app-muted">Consult the Archives</h2>
-                    <ChatWidget contextMode="allReflections" />
+                {/* Badge Wall */}
+                <section className="mb-12">
+                    <BadgeWall badges={badges} userBadges={userBadges} />
                 </section>
             </main>
         </div>

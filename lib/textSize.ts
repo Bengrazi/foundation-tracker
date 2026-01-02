@@ -18,7 +18,7 @@ export function applySavedTextSize() {
   const size: TextSize =
     saved === "medium" || saved === "large" || saved === "small" || saved === "xl"
       ? saved
-      : "small";
+      : "large";
 
   document.documentElement.dataset.textSize = size;
 }

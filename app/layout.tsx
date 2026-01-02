@@ -48,6 +48,8 @@ export default function RootLayout({
                   var savedSize = localStorage.getItem('foundation_ui_text_size_v1');
                   if (savedSize) {
                     document.documentElement.setAttribute('data-text-size', savedSize);
+                  } else {
+                    document.documentElement.setAttribute('data-text-size', 'large');
                   }
                 } catch (e) {}
               })()

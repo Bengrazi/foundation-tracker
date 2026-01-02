@@ -45,7 +45,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const [exporting, setExporting] = useState<ExportRange | null>(null);
   const [resetting, setResetting] = useState(false);
-  const [textSize, setTextSizeState] = useState<TextSize>("small");
+  const [textSize, setTextSizeState] = useState<TextSize>("large");
   const [theme, setThemeState] = useState<Theme>("dark");
 
   // Initialize from localStorage to prevent flash
@@ -250,8 +250,6 @@ export default function SettingsPage() {
   const themeOptions: { label: string; value: Theme }[] = [
     { label: "Dark", value: "dark" },
     { label: "Light", value: "light" },
-    { label: "Cherry", value: "cherry" },
-    { label: "Cherry Dark", value: "cherry-dark" },
   ];
 
   return (
