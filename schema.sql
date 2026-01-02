@@ -1,5 +1,5 @@
 -- ============================================
--- CHERRY APP - Complete Database Schema
+-- FOUNDATION APP - Complete Database Schema
 -- Safe to run multiple times (idempotent)
 -- ============================================
 
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   ideology text,
   key_truth text,
   ai_voice text,
-  theme text DEFAULT 'cherry',
+  theme text DEFAULT 'foundation',
   text_size text DEFAULT 'small',
   points int DEFAULT 0,
   created_at timestamptz DEFAULT now()
@@ -29,10 +29,8 @@ CREATE TABLE IF NOT EXISTS public.foundations (
   id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id uuid REFERENCES auth.users ON DELETE CASCADE NOT NULL,
   title text NOT NULL,
-  -- Deprecated: schedule_type, x_per_week
   schedule_type text NOT NULL,
   x_per_week int,
-  -- Discipline-First Columns
   days_of_week text[], -- Array of strings e.g. ['Mon', 'Tue', 'Fri']
   times_per_day int DEFAULT 1,
   start_date text NOT NULL,
@@ -108,7 +106,7 @@ CREATE TABLE IF NOT EXISTS public.celebrations (
   created_at timestamptz DEFAULT now()
 );
 
--- Points History (Cherry points ledger)
+-- Points History
 CREATE TABLE IF NOT EXISTS public.points_history (
   id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id uuid REFERENCES auth.users ON DELETE CASCADE NOT NULL,
@@ -118,25 +116,45 @@ CREATE TABLE IF NOT EXISTS public.points_history (
   created_at timestamptz DEFAULT now()
 );
 
+-- BADGES SYSTEM (New for FOUNDATION)
+CREATE TABLE IF NOT EXISTS public.badges (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  slug text UNIQUE NOT NULL,
+  name text NOT NULL,
+  description text NOT NULL,
+  category text NOT NULL, -- 'gold_streak', 'recovery', 'habit_streak'
+  tier int DEFAULT 1, -- 1=common, 2=rare, 3=epic, 4=legendary
+  image_url text,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.user_badges (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id uuid REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+  badge_id uuid REFERENCES public.badges ON DELETE CASCADE NOT NULL,
+  unlocked_at timestamptz DEFAULT now(),
+  UNIQUE(user_id, badge_id)
+);
+
 -- ============================================
--- 3. ADD MISSING COLUMNS (safe if already exist)
+-- 3. ADD MISSING COLUMNS
 -- ============================================
 
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS theme text DEFAULT 'cherry';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS theme text DEFAULT 'foundation';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS text_size text DEFAULT 'small';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS points int DEFAULT 0;
 ALTER TABLE public.foundations ADD COLUMN IF NOT EXISTS order_index int DEFAULT 0;
 ALTER TABLE public.goals ADD COLUMN IF NOT EXISTS order_index int DEFAULT 0;
 ALTER TABLE public.daily_intentions ADD COLUMN IF NOT EXISTS question text;
+ALTER TABLE public.daily_intentions ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false;
+ALTER TABLE public.daily_intentions ADD COLUMN IF NOT EXISTS is_ongoing boolean DEFAULT false;
 
--- Discipline-First Pivot Columns
+-- Discipline-First Columns
 ALTER TABLE public.foundations ADD COLUMN IF NOT EXISTS days_of_week text[];
 ALTER TABLE public.foundations ADD COLUMN IF NOT EXISTS times_per_day int DEFAULT 1;
 
--- Ensure profiles has points (total_cherries)
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS points int DEFAULT 0;
-
--- Streak Tracking Columns
+-- Streak Tracking
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS current_gold_streak int DEFAULT 0;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_gold_date text;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS best_gold_streak int DEFAULT 0;
@@ -154,6 +172,8 @@ ALTER TABLE public.daily_intentions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.board_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.celebrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.points_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.badges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_badges ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- 5. RLS POLICIES
@@ -360,11 +380,37 @@ CREATE POLICY "Users can delete their own points history"
   ON public.points_history FOR DELETE TO authenticated
   USING ((SELECT auth.uid()) = user_id);
 
+-- BADGES
+DROP POLICY IF EXISTS "Everyone can view badges" ON public.badges;
+CREATE POLICY "Everyone can view badges" ON public.badges FOR SELECT TO authenticated USING (true);
+
+-- USER BADGES
+DROP POLICY IF EXISTS "Users can view their own badges" ON public.user_badges;
+CREATE POLICY "Users can view their own badges" ON public.user_badges FOR SELECT TO authenticated USING ((SELECT auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "Users can insert their own badges" ON public.user_badges;
+CREATE POLICY "Users can insert their own badges" ON public.user_badges FOR INSERT TO authenticated WITH CHECK ((SELECT auth.uid()) = user_id);
+
+
 -- ============================================
--- 6. FUNCTIONS (RPCs)
+-- 6. SEED DATA (Badges)
 -- ============================================
 
--- Atomic point updates (prevents race conditions)
+INSERT INTO public.badges (slug, name, description, category, tier) VALUES
+('gold_streak_1', 'First Step', 'One perfect day.', 'gold_streak', 1),
+('gold_streak_7', 'Week of Iron', 'Seven perfect days.', 'gold_streak', 2),
+('gold_streak_30', 'Month of Discipline', 'Thirty perfect days.', 'gold_streak', 2),
+('gold_streak_100', 'Centurion', '100 perfect days.', 'gold_streak', 3),
+('gold_streak_365', 'HERO', 'One full year of perfection.', 'gold_streak', 4),
+('gold_streak_1000', 'LEGEND', '1000 days. You are built different.', 'gold_streak', 4),
+('comeback_kid', 'Don''t Call It a Comeback', 'Returned to perfection after a fall.', 'recovery', 2),
+('iron_mind', 'IRON MIND', 'Multiple long streaks across time.', 'recovery', 3)
+ON CONFLICT (slug) DO NOTHING;
+
+-- ============================================
+-- 7. FUNCTIONS
+-- ============================================
+
 CREATE OR REPLACE FUNCTION increment_points(user_id_input uuid, amount_input int)
 RETURNS void AS $$
 BEGIN
@@ -373,18 +419,6 @@ BEGIN
   WHERE id = user_id_input;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- ============================================
--- 7. DATA FIXES (Run once to correct data)
--- ============================================
-
--- Recalculate all user points from history
-UPDATE profiles
-SET points = (
-  SELECT COALESCE(SUM(amount), 0)
-  FROM points_history
-  WHERE points_history.user_id = profiles.id
-);
 
 -- ============================================
 -- 8. RELOAD SCHEMA CACHE

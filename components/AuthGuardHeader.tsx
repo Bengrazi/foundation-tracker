@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
-import { PointsDisplay } from "./PointsDisplay";
+
 
 export function AuthGuardHeader() {
   const router = useRouter();
@@ -35,7 +35,7 @@ export function AuthGuardHeader() {
       <header className="mx-auto flex max-w-md items-center justify-between px-4 pt-4">
         <div className="flex items-center gap-3">
           <span className="text-xs font-semibold tracking-wide text-app-muted uppercase">
-            Cherry
+            Foundation
           </span>
           <div className="h-5 w-16 animate-pulse rounded-full bg-app-card" />
         </div>
@@ -47,10 +47,9 @@ export function AuthGuardHeader() {
   return (
     <header className="mx-auto flex max-w-md items-center justify-between px-4 pt-4">
       <div className="flex items-center gap-3">
-        <span className="text-xs font-semibold tracking-wide text-app-muted uppercase">
-          Cherry
+        <span className="text-xs font-bold tracking-widest text-app-muted uppercase">
+          Foundation
         </span>
-        <PointsDisplay />
       </div>
       <button
         onClick={logout}

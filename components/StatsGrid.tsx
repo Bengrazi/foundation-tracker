@@ -13,10 +13,10 @@ type StatsData = {
 
 export function StatsGrid({ stats }: { stats: StatsData }) {
     const items = [
-        { label: "Current Gold Streak", value: stats.currentGoldStreak, icon: "🔥", color: "text-amber-500" },
-        { label: "Longest Gold Streak", value: stats.bestGoldStreak, icon: "🏆", color: "text-yellow-600" },
-        { label: "Habits Completed", value: stats.totalHabitsCompleted, icon: "✅", color: "text-emerald-500" },
-        { label: "Days Active", value: stats.daysActive, icon: "📅", color: "text-blue-500" },
+        { label: "Longest Gold Streak", value: stats.bestGoldStreak, icon: "🏆", color: "text-yellow-500" },
+        { label: "Total Days Tracked", value: stats.daysActive, icon: "📅", color: "text-stone-400" },
+        { label: "Habits Completed", value: stats.totalHabitsCompleted, icon: "✅", color: "text-stone-500" },
+        // { label: "Current Gold Streak", value: stats.currentGoldStreak, icon: "🔥", color: "text-amber-500" },
     ];
 
     return (

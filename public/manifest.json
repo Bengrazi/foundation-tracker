@@ -1,10 +1,10 @@
 {
-    "name": "CHERRY",
-    "short_name": "CHERRY",
+    "name": "FOUNDATION",
+    "short_name": "FOUNDATION",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#020617",
-    "theme_color": "#020617",
+    "background_color": "#0c0a09",
+    "theme_color": "#0c0a09",
     "icons": [
         {
             "src": "/icons/icon-192.png",

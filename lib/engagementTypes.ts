@@ -4,6 +4,7 @@ export interface DailyIntention {
     date: string;
     content: string;
     vote: "up" | "down" | null;
+    locked: boolean;
     created_at: string;
 }
 
@@ -56,4 +57,23 @@ export interface UserProfile {
     current_gold_streak?: number;
     last_gold_date?: string;
     best_gold_streak?: number;
+}
+
+export interface Badge {
+    id: string;
+    slug: string;
+    name: string;
+    description: string;
+    category: "gold_streak" | "recovery" | "habit_streak";
+    tier: number;
+    image_url?: string;
+    metadata?: any;
+    created_at: string;
+}
+
+export interface UserBadge {
+    id: string;
+    user_id: string;
+    badge_id: string;
+    unlocked_at: string;
 }

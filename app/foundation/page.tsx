@@ -12,6 +12,8 @@ import { awardPoints, POINTS } from "@/lib/points";
 import { HabitBubble } from "@/components/HabitBubble";
 import { HabitManager } from "@/components/HabitManager";
 import { TEXT_SIZE_KEY, TextSize } from "@/lib/textSize";
+import { GoldStreakCounter } from "@/components/GoldStreakCounter";
+import { DailyIntention as DailyIntentionComponent } from "@/components/DailyIntention";
 
 // --- Constants ---
 const GOLD_MILESTONES = [1, 3, 7, 14, 30, 50, 75, 100, 150, 200, 250, 300, 365, 500, 1000];
@@ -64,6 +66,7 @@ export default function FoundationPage() {
   const {
     foundations: globalFoundations,
     dailyIntention,
+    refreshIntention,
     refreshFoundations,
     refreshPoints,
     refreshGoals,
@@ -92,6 +95,35 @@ export default function FoundationPage() {
   const [priorities, setPriorities] = useState("");
   const [ideology, setIdeology] = useState("");
   const [onboardingLoading, setOnboardingLoading] = useState(false);
+
+  // -- Intention Handlers --
+  const handleUpdateIntention = async (newContent: string) => {
+    if (!dailyIntention) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetch("/api/intention", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session?.access_token}`,
+      },
+      body: JSON.stringify({ id: dailyIntention.id, content: newContent }),
+    });
+    await refreshIntention();
+  };
+
+  const handleLockIntention = async () => {
+    if (!dailyIntention) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetch("/api/intention", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session?.access_token}`,
+      },
+      body: JSON.stringify({ id: dailyIntention.id, locked: true }),
+    });
+    await refreshIntention();
+  };
 
   // -- Computed Foundations --
   const todaysFoundations = useMemo(() => {
@@ -241,8 +273,7 @@ export default function FoundationPage() {
         setTodaysLogs(prev => prev.map(l => l.id === tempId ? realLog : l));
         setHistoryLogs(prev => prev.map(l => l.id === tempId ? realLog : l));
 
-        await awardPoints(user.id, POINTS.HABIT_COMPLETION, "habit_completion", foundation.id);
-        await refreshPoints();
+        // Points removed for FOUNDATION philosophy
 
         // Check Gold Streak achievement
         const updatedLogs = [...todaysLogs, newLog];
@@ -276,10 +307,25 @@ export default function FoundationPage() {
           // Refresh global state
           await refreshProfile();
 
-          // Milestone Celebration
-          if (GOLD_MILESTONES.includes(newStreak)) {
-            setCelebrationMessage("Gold Streak Achieved! Discipline is destiny.");
-            setShowCelebration(true);
+          // Check for Badges
+          const { data: { session } } = await supabase.auth.getSession();
+          try {
+            const badgeRes = await fetch("/api/badges/check", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${session?.access_token}` }
+            });
+            const badgeData = await badgeRes.json();
+
+            if (badgeData.newBadges && badgeData.newBadges.length > 0) {
+              const names = badgeData.newBadges.map((b: any) => b.name).join(" & ");
+              setCelebrationMessage(`Badge Unlocked: ${names}`);
+              setShowCelebration(true);
+            } else if (GOLD_MILESTONES.includes(newStreak)) {
+              setCelebrationMessage("Gold Streak Achieved! Discipline is destiny.");
+              setShowCelebration(true);
+            }
+          } catch (e) {
+            console.error("Badge check failed", e);
           }
         }
       }
@@ -384,7 +430,7 @@ export default function FoundationPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-6 backdrop-blur-md animate-in fade-in duration-300">
           <div className="w-full max-w-md bg-app-card rounded-3xl p-6 shadow-2xl border border-app-border space-y-6 max-h-[90vh] overflow-y-auto">
             <div className="text-center">
-              <h2 className="text-xl font-bold text-app-main">Welcome to Cherry 🍒</h2>
+              <h2 className="text-xl font-bold text-app-main">Welcome to FOUNDATION</h2>
               <p className="mt-2 text-sm text-app-muted">
                 Let&apos;s personalize your experience. Answer a few questions to get started.
               </p>
@@ -440,31 +486,28 @@ export default function FoundationPage() {
       <main className="mx-auto max-w-md px-6 pt-6 relative">
         {/* Header Area */}
         <header className="mb-2 text-center pt-4">
-          <p className="text-[0.65rem] text-app-muted uppercase tracking-widest mb-1 font-semibold">
+          <p className="text-[0.65rem] text-app-muted uppercase tracking-widest mb-4 font-semibold">
             {format(parseISO(selectedDate), "EEEE, MMMM d")}
           </p>
-          <h1 className="text-lg md:text-xl font-serif italic text-app-main leading-relaxed px-4 mb-4">
-            &ldquo;{dailyIntention?.content || "Discipline is the bridge between goals and accomplishment."}&rdquo;
-          </h1>
 
-          {/* Controls: Gold Streak & Manage */}
-          <div className="flex items-center justify-between px-4 py-2 bg-app-card/50 rounded-xl mb-6">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">🏆</span>
-              <div className="flex flex-col items-start px-2">
-                <span className="text-xs font-bold text-yellow-600">Gold Streak</span>
-                <span className="text-lg font-bold leading-none">{currentGoldStreak}</span>
-              </div>
-            </div>
+          <DailyIntentionComponent
+            intention={dailyIntention?.content || "Discipline is the bridge between goals and accomplishment."}
+            locked={dailyIntention?.locked || false}
+            onUpdate={handleUpdateIntention}
+            onLock={handleLockIntention}
+          />
 
+          <GoldStreakCounter count={currentGoldStreak} />
+
+          <div className="flex justify-center mb-6">
             <button
               onClick={() => setIsEditing(!isEditing)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${isEditing
+              className={`text-xs px-4 py-2 rounded-full border transition-colors ${isEditing
                 ? "bg-app-accent text-app-accent-text border-app-accent"
                 : "border-app-border text-app-muted hover:text-app-main"
                 }`}
             >
-              {isEditing ? "Done" : "Manage Habits"}
+              {isEditing ? "Done Editing" : "Manage Routine"}
             </button>
           </div>
         </header>

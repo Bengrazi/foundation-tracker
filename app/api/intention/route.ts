@@ -147,3 +147,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
   }
 }
+
+export async function PATCH(req: Request) {
+  try {
+    const supabase = getSupabaseClient(req);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id, content, locked } = await req.json();
+
+    if (!id) {
+      return NextResponse.json({ error: "ID required" }, { status: 400 });
+    }
+
+    const updates: any = {};
+    if (content !== undefined) updates.content = content;
+    if (locked !== undefined) updates.locked = locked;
+
+    const { error } = await supabase
+      .from("daily_intentions")
+      .update(updates)
+      .eq("id", id)
+      .eq("user_id", user.id); // Ensure ownership
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("[API] Unhandled error in PATCH /api/intention:", error);
+    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+  }
+}

@@ -6,31 +6,29 @@
 
 @layer base {
   :root {
-    /* Default Dark (Slate) */
-    --bg-main: #020617;
-    /* slate-950 */
-    --bg-card: #0f172a;
-    /* slate-900 */
-    --bg-card-hover: #1e293b;
-    /* slate-800 */
-    --bg-input: rgba(15, 23, 42, 0.7);
-    /* slate-950/70ish */
-    --text-main: #f8fafc;
-    /* slate-50 */
-    --text-muted: #94a3b8;
-    /* slate-400 */
-    --border: #10b981;
-    /* slate-800 */
-    --accent: #10b981;
-    /* emerald-500 */
-    --accent-hover: #34d399;
-    /* emerald-400 */
-    --accent-text: #020617;
-    /* slate-950 */
-    --danger: #f87171;
-    /* red-400 */
-    --danger-bg: rgba(69, 10, 10, 0.2);
-    /* red-950/20 */
+    /* Default Dark (Foundation Check) */
+    --bg-main: #0c0a09;
+    /* stone-950 */
+    --bg-card: #1c1917;
+    /* stone-900 */
+    --bg-card-hover: #292524;
+    /* stone-800 */
+    --bg-input: rgba(28, 25, 23, 0.7);
+    --text-main: #f5f5f4;
+    /* stone-100 */
+    --text-muted: #a8a29e;
+    /* stone-400 */
+    --border: #44403c;
+    /* stone-700 */
+    --accent: #d97706;
+    /* amber-600 (Brick/Gold-ish) */
+    --accent-hover: #b45309;
+    /* amber-700 */
+    --accent-text: #f5f5f4;
+    /* stone-100 */
+    --danger: #ef4444;
+    /* red-500 */
+    --danger-bg: rgba(127, 29, 29, 0.2);
   }
 
   [data-theme="light"] {
@@ -84,55 +82,7 @@
     --danger-bg: #fee2e2;
   }
 
-  [data-theme="cherry"] {
-    /* Cherry (Red-tone Sunshine - Standard) */
-    --bg-main: #fff0f5;
-    /* More cherry/lavender blush tint */
-    /* red-50 */
-    --bg-card: #fff9fa;
-    --bg-card-hover: #ffe4e8;
-    /* red-100 */
-    --bg-input: #ffffff;
-    /* red-50 */
-    --text-main: #881337;
-    /* rose-900 */
-    --text-muted: #9bd1bb;
-    /* teal-ish for contrast or keep red */
-    --text-muted: #9f1239;
-    /* darker red for muted text */
-    --border: #be123c;
-    /* red-200 */
-    --accent: #e11d48;
-    /* rose-600 */
-    --accent-hover: #be123c;
-    /* red-700 */
-    --accent-text: #ffffff;
-    --danger: #ef4444;
-    --danger-bg: #fee2e2;
-  }
-
-  [data-theme="cherry-dark"] {
-    /* Cherry Dark (Dark with Red/Green highlights) */
-    --bg-main: #0f0505;
-    /* very dark red/black */
-    --bg-card: #1c0a0a;
-    /* dark red/black */
-    --bg-card-hover: #2b0f0f;
-    --bg-input: rgba(28, 10, 10, 0.7);
-    --text-main: #ffe4e6;
-    /* rose-100 */
-    --text-muted: #fda4af;
-    /* rose-300 */
-    --border: #be123c;
-    /* rose-950 */
-    --accent: #e11d48;
-    /* rose-600 (Cherry) */
-    --accent-hover: #16a34a;
-    /* green-600 (Stem - fun hover) */
-    --accent-text: #ffffff;
-    --danger: #ef4444;
-    --danger-bg: rgba(69, 10, 10, 0.4);
-  }
+  /* Cherry themes removed for FOUNDATION rebranding */
 }
 
 html,
